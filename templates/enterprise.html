@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enterprise Data Processing Platform</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            color: white;
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        .main-card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        
+        .upload-section {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 60px 20px;
+            background: linear-gradient(135deg, #f8f9ff 0%, #e8ebff 100%);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        
+        .upload-area:hover {
+            border-color: #764ba2;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.2);
+        }
+        
+        .upload-area.dragover {
+            border-color: #28a745;
+            background: linear-gradient(135deg, #f0fff0 0%, #e0ffe0 100%);
+        }
+        
+        .upload-icon {
+            font-size: 3rem;
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+        
+        .upload-text {
+            font-size: 1.2rem;
+            color: #555;
+            margin-bottom: 10px;
+        }
+        
+        .upload-subtext {
+            color: #888;
+            font-size: 0.9rem;
+        }
+        
+        #fileInput {
+            display: none;
+        }
+        
+        .file-info {
+            display: none;
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            border-left: 4px solid #28a745;
+        }
+        
+        .analysis-section {
+            display: none;
+            margin-top: 30px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.2);
+        }
+        
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        
+        .download-section {
+            margin: 30px 0;
+        }
+        
+        .download-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+        
+        .download-card {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 25px;
+            text-align: center;
+            border: 2px solid #e9ecef;
+            transition: all 0.3s ease;
+        }
+        
+        .download-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+        
+        .processing-section {
+            margin-top: 30px;
+            padding: 30px;
+            background: #f8f9ff;
+            border-radius: 15px;
+            border: 2px solid #e8ebff;
+        }
+        
+        .processing-options {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .process-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            border: 2px solid #e9ecef;
+            transition: all 0.3s ease;
+        }
+        
+        .process-card:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+        }
+        
+        .process-icon {
+            font-size: 2rem;
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+        }
+        
+        .btn-success:hover {
+            box-shadow: 0 8px 25px rgba(40, 167, 69, 0.4);
+        }
+        
+        .input-group {
+            margin: 15px 0;
+        }
+        
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #555;
+        }
+        
+        .input-group input,
+        .input-group select {
+            width: 100%;
+            padding: 10px 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+        
+        .input-group input:focus,
+        .input-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .alert {
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            border-left: 4px solid;
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            border-color: #28a745;
+            color: #155724;
+        }
+        
+        .alert-error {
+            background: #f8d7da;
+            border-color: #dc3545;
+            color: #721c24;
+        }
+        
+        .alert-info {
+            background: #d1ecf1;
+            border-color: #17a2b8;
+            color: #0c5460;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .progress-bar {
+            display: none;
+            width: 100%;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .section-title i {
+            color: #667eea;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .main-card {
+                padding: 20px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .processing-options {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-chart-line"></i> Enterprise Data Processing</h1>
+            <p>Professional Lead Generation & Data Enhancement Platform</p>
+        </div>
+
+        <div class="main-card">
+            <!-- File Upload Section -->
+            <div class="upload-section">
+                <div class="section-title">
+                    <i class="fas fa-upload"></i>
+                    Upload Your Data File
+                </div>
+                <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+                    <div class="upload-icon">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                    </div>
+                    <div class="upload-text">Click to upload or drag and drop</div>
+                    <div class="upload-subtext">Supports CSV, Excel (.xlsx, .xls) files up to 50MB</div>
+                </div>
+                <input type="file" id="fileInput" accept=".csv,.xlsx,.xls">
+            </div>
+
+            <!-- File Information Display -->
+            <div id="fileInfo" class="file-info">
+                <h3><i class="fas fa-file-alt"></i> File Information</h3>
+                <div id="fileDetails"></div>
+            </div>
+
+            <!-- Analysis Results Section -->
+            <div id="analysisSection" class="analysis-section">
+                <div class="section-title">
+                    <i class="fas fa-analytics"></i>
+                    File Analysis Results
+                </div>
+                
+                <div class="stats-grid" id="statsGrid">
+                    <!-- Stats will be populated by JavaScript -->
+                </div>
+
+                <!-- Download Separated Files -->
+                <div id="downloadSection" class="download-section">
+                    <div class="section-title">
+                        <i class="fas fa-download"></i>
+                        Download Separated Files
+                    </div>
+                    <div class="download-grid" id="downloadGrid">
+                        <!-- Download links will be populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Processing Section -->
+                <div class="processing-section">
+                    <div class="section-title">
+                        <i class="fas fa-cogs"></i>
+                        Data Enhancement Services
+                    </div>
+                    
+                    <div class="processing-options">
+                        <div class="process-card">
+                            <div class="process-icon">
+                                <i class="fas fa-phone"></i>
+                            </div>
+                            <h3>Phone Number Search</h3>
+                            <p>Find phone numbers for records using advanced web scraping</p>
+                            
+                            <div class="input-group">
+                                <label for="maxRecordsPhone">Maximum Records to Process:</label>
+                                <input type="number" id="maxRecordsPhone" value="10" min="1" max="1000">
+                            </div>
+                            
+                            <button class="btn" onclick="startProcessing('phone')" id="phoneBtn">
+                                <i class="fas fa-search"></i> Start Phone Search
+                            </button>
+                        </div>
+
+                        <div class="process-card">
+                            <div class="process-icon">
+                                <i class="fas fa-home"></i>
+                            </div>
+                            <h3>Property Information</h3>
+                            <p>Enhance records with detailed property information</p>
+                            
+                            <div class="input-group">
+                                <label for="maxRecordsProperty">Maximum Records to Process:</label>
+                                <input type="number" id="maxRecordsProperty" value="10" min="1" max="1000">
+                            </div>
+                            
+                            <button class="btn" onclick="startProcessing('property')" id="propertyBtn">
+                                <i class="fas fa-search"></i> Start Property Search
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loading Animation -->
+            <div id="loading" class="loading">
+                <div class="spinner"></div>
+                <div id="loadingText">Processing your request...</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+            </div>
+
+            <!-- Results/Alerts -->
+            <div id="alerts"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentFileId = null;
+        let currentFileName = null;
+
+        // File upload handling
+        const fileInput = document.getElementById('fileInput');
+        const uploadArea = document.querySelector('.upload-area');
+        const fileInfo = document.getElementById('fileInfo');
+        const analysisSection = document.getElementById('analysisSection');
+
+        // Drag and drop functionality
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        function handleFile(file) {
+            // Validate file type
+            const allowedTypes = ['text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+            const allowedExtensions = ['.csv', '.xlsx', '.xls'];
+            const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+            
+            if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
+                showAlert('Please upload a CSV or Excel file (.csv, .xlsx, .xls)', 'error');
+                return;
+            }
+
+            // Validate file size (50MB limit)
+            if (file.size > 50 * 1024 * 1024) {
+                showAlert('File size must be less than 50MB', 'error');
+                return;
+            }
+
+            currentFileName = file.name;
+            
+            // Show file info
+            document.getElementById('fileDetails').innerHTML = `
+                <p><strong>File:</strong> ${file.name}</p>
+                <p><strong>Size:</strong> ${formatFileSize(file.size)}</p>
+                <p><strong>Type:</strong> ${file.type || 'Unknown'}</p>
+            `;
+            fileInfo.style.display = 'block';
+
+            // Upload and analyze file
+            uploadAndAnalyze(file);
+        }
+
+        function uploadAndAnalyze(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            showLoading('Analyzing your file...');
+
+            fetch('/analyze', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                if (data.error) {
+                    showAlert(data.error, 'error');
+                } else {
+                    currentFileId = data.file_id;
+                    displayAnalysisResults(data);
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                showAlert('Upload failed: ' + error.message, 'error');
+            });
+        }
+
+        function displayAnalysisResults(data) {
+            const stats = data.stats;
+            const downloadUrls = data.download_urls;
+
+            // Show analysis section
+            analysisSection.style.display = 'block';
+
+            // Populate stats
+            const statsGrid = document.getElementById('statsGrid');
+            statsGrid.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-number">${stats.total_records}</div>
+                    <div class="stat-label">Total Records</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.has_phone}</div>
+                    <div class="stat-label">With Phone Numbers</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.no_phone}</div>
+                    <div class="stat-label">Without Phone Numbers</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.phone_percentage.toFixed(1)}%</div>
+                    <div class="stat-label">Phone Coverage</div>
+                </div>
+            `;
+
+            // Populate download links if available
+            const downloadGrid = document.getElementById('downloadGrid');
+            const downloadSection = document.getElementById('downloadSection');
+            
+            if (Object.keys(downloadUrls).length > 0) {
+                let downloadHTML = '';
+                
+                if (downloadUrls.with_phone) {
+                    downloadHTML += `
+                        <div class="download-card">
+                            <h3><i class="fas fa-phone text-success"></i> Records With Phone</h3>
+                            <p>${stats.has_phone} records</p>
+                            <a href="${downloadUrls.with_phone}" class="btn btn-success">
+                                <i class="fas fa-download"></i> Download
+                            </a>
+                        </div>
+                    `;
+                }
+                
+                if (downloadUrls.without_phone) {
+                    downloadHTML += `
+                        <div class="download-card">
+                            <h3><i class="fas fa-phone-slash text-warning"></i> Records Without Phone</h3>
+                            <p>${stats.no_phone} records</p>
+                            <a href="${downloadUrls.without_phone}" class="btn">
+                                <i class="fas fa-download"></i> Download
+                            </a>
+                        </div>
+                    `;
+                }
+                
+                downloadGrid.innerHTML = downloadHTML;
+                downloadSection.style.display = 'block';
+            } else {
+                downloadSection.style.display = 'none';
+            }
+
+            showAlert(`Analysis complete! Found ${stats.total_records} total records. Phone column used: ${stats.phone_column_used}`, 'success');
+        }
+
+        function startProcessing(service) {
+            if (!currentFileId) {
+                showAlert('Please upload a file first', 'error');
+                return;
+            }
+
+            const maxRecords = service === 'phone' ? 
+                document.getElementById('maxRecordsPhone').value : 
+                document.getElementById('maxRecordsProperty').value;
+
+            const btnId = service === 'phone' ? 'phoneBtn' : 'propertyBtn';
+            const btn = document.getElementById(btnId);
+            
+            // Disable button and show loading
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Processing...`;
+            showLoading(`Starting ${service} search for up to ${maxRecords} records...`);
+
+            const requestData = {
+                service: service,
+                file_id: currentFileId,
+                max_records: parseInt(maxRecords)
+            };
+
+            fetch('/process_direct', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                
+                // Re-enable button
+                btn.disabled = false;
+                btn.innerHTML = service === 'phone' ? 
+                    '<i class="fas fa-search"></i> Start Phone Search' : 
+                    '<i class="fas fa-search"></i> Start Property Search';
+
+                if (data.success) {
+                    showAlert(`${service.charAt(0).toUpperCase() + service.slice(1)} search completed successfully! Processed ${data.records_processed} records.`, 'success');
+                    
+                    // Add download button for results
+                    const alertDiv = document.querySelector('#alerts .alert-success:last-child');
+                    if (alertDiv && data.download_url) {
+                        alertDiv.innerHTML += `<br><br><a href="${data.download_url}" class="btn btn-success"><i class="fas fa-download"></i> Download Results (${data.filename})</a>`;
+                    }
+                } else {
+                    showAlert(`${service.charAt(0).toUpperCase() + service.slice(1)} search failed: ${data.error}`, 'error');
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                
+                // Re-enable button
+                btn.disabled = false;
+                btn.innerHTML = service === 'phone' ? 
+                    '<i class="fas fa-search"></i> Start Phone Search' : 
+                    '<i class="fas fa-search"></i> Start Property Search';
+                    
+                showAlert(`${service.charAt(0).toUpperCase() + service.slice(1)} search failed: ${error.message}`, 'error');
+            });
+        }
+
+        function showLoading(text = 'Processing...') {
+            document.getElementById('loadingText').textContent = text;
+            document.getElementById('loading').style.display = 'block';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function showAlert(message, type = 'info') {
+            const alertsContainer = document.getElementById('alerts');
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type}`;
+            alertDiv.innerHTML = `
+                <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+                ${message}
+                <button onclick="this.parentElement.remove()" style="float: right; background: none; border: none; font-size: 1.2rem; cursor: pointer;">&times;</button>
+            `;
+            alertsContainer.appendChild(alertDiv);
+
+            // Auto remove after 10 seconds for success messages
+            if (type === 'success') {
+                setTimeout(() => {
+                    if (alertDiv.parentElement) {
+                        alertDiv.remove();
+                    }
+                }, 10000);
+            }
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+    </script>
+</body>
+</html>

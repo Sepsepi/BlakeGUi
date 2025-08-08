@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# Build artifacts
+build/
+dist/
+dist_cx/
+PhonenumberExtractor/
+*.egg-info/
+*.spec
+
+# Playwright browsers and large files
+**/playwright/driver/package/.local-browsers/
+**/node.exe
+**/chrome.dll
+**/headless_shell.exe
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.bak
+
+# Ignore browser downloads in builds
+**/browsers/
+**/.playwright/
+
+# Test outputs
+test_output_*.csv
