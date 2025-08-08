@@ -1,0 +1,1233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enterprise Data Processing Platform</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        /* Tab Navigation */
+        .tab-nav {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 30px;
+            background: white;
+            border-radius: 15px;
+            padding: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .tab-btn {
+            padding: 15px 30px;
+            margin: 0 5px;
+            border: none;
+            background: transparent;
+            color: #666;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .tab-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102,126,234,0.4);
+        }
+
+        .tab-btn:hover {
+            color: #667eea;
+        }
+
+        /* Tab Content */
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .main-card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+
+        .upload-section {
+            margin-bottom: 30px;
+        }
+
+        .upload-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+        }
+
+        .upload-section h2 i {
+            margin-right: 10px;
+            color: #667eea;
+        }
+
+        .upload-area {
+            border: 3px dashed #ddd;
+            border-radius: 15px;
+            padding: 60px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            background: #fafafa;
+        }
+
+        .upload-area:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+            transform: translateY(-2px);
+        }
+
+        .upload-area.dragover {
+            border-color: #667eea;
+            background: #e8f2ff;
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+
+        .upload-text {
+            font-size: 1.2rem;
+            color: #333;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .upload-subtext {
+            color: #666;
+            font-size: 0.95rem;
+        }
+
+        .file-info {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            display: none;
+            border-left: 4px solid #28a745;
+        }
+
+        .file-info h4 {
+            color: #28a745;
+            margin-bottom: 10px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(102,126,234,0.3);
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .process-section {
+            margin-top: 40px;
+            padding: 30px;
+            background: #f8f9fa;
+            border-radius: 15px;
+        }
+
+        .process-section h3 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+
+        .btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .download-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+
+        .download-card {
+            background: white;
+            border: 2px solid #ddd;
+            border-radius: 15px;
+            padding: 25px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .download-card:hover {
+            border-color: #667eea;
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(102,126,234,0.2);
+        }
+
+        .download-card h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .loading {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            color: white;
+        }
+
+        .loading.show {
+            display: flex;
+        }
+
+        .alert {
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        .alert i {
+            margin-right: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .main-card {
+                padding: 20px;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                gap: 15px;
+            }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Data Viewer Styles */
+        .data-viewer {
+            margin-top: 30px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            padding: 25px;
+        }
+
+        .data-viewer h3 {
+            margin-bottom: 20px;
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+
+        .viewer-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .pagination-info {
+            color: #666;
+            font-weight: 500;
+        }
+
+        .pagination-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .pagination-controls span {
+            font-weight: 500;
+            color: #333;
+        }
+
+        .viewer-tools {
+            display: flex;
+            gap: 10px;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.05);
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+
+        .data-table th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 10px;
+            text-align: left;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .data-table td {
+            padding: 12px 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .data-table tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        .data-table tbody tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 2px solid #007bff;
+            color: #007bff;
+        }
+
+        .btn-outline:hover {
+            background: #007bff;
+            color: white;
+        }
+
+        @media (max-width: 768px) {
+            .viewer-controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .pagination-controls {
+                justify-content: center;
+            }
+
+            .viewer-tools {
+                justify-content: center;
+            }
+
+            .data-table th,
+            .data-table td {
+                padding: 8px 5px;
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-chart-line"></i> womp womp 3600</h1>
+            <p>Professional Lead Generation & Data Enhancement Platform</p>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="tab-nav">
+            <button class="tab-btn active" onclick="showTab('phone-extraction')">
+                <i class="fas fa-phone"></i> Phone Extraction
+            </button>
+            <button class="tab-btn" onclick="showTab('address-processing')">
+                <i class="fas fa-home"></i> Reverse Address Extractor
+            </button>
+        </div>
+
+        <!-- Phone Extraction Tab -->
+        <div id="phone-extraction" class="tab-content active">
+            <div class="main-card">
+                <div class="upload-section">
+                    <h2>
+                        <i class="fas fa-upload"></i>
+                        Upload File for Phone Number Extraction
+                    </h2>
+                    <div class="upload-area" onclick="document.getElementById('phoneFileInput').click()">
+                        <div class="upload-icon">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                        </div>
+                        <div class="upload-text">Click to upload or drag and drop</div>
+                        <div class="upload-subtext">ZabaSearch phone extraction - separates records with/without phones</div>
+                    </div>
+                    <input type="file" id="phoneFileInput" accept=".csv,.xlsx,.xls" style="display: none;">
+                </div>
+
+                <div id="phoneFileInfo" class="file-info">
+                    <!-- File info will be populated here -->
+                </div>
+
+                <div id="phoneStats" class="stats-grid">
+                    <!-- Stats will be populated here -->
+                </div>
+
+                <div id="phoneDownloads" class="download-grid">
+                    <!-- Download links will be populated here -->
+                </div>
+
+                <div id="phoneDataViewer" class="data-viewer hidden">
+                    <h3><i class="fas fa-table"></i> Data Preview</h3>
+                    <div class="viewer-controls">
+                        <div class="pagination-info">
+                            <span id="phoneRecordCount">0 records</span>
+                        </div>
+                        <div class="pagination-controls">
+                            <button onclick="previousPage('phone')" id="phonePrevBtn" class="btn btn-secondary" disabled>
+                                <i class="fas fa-chevron-left"></i> Previous
+                            </button>
+                            <span id="phonePageInfo">Page 1 of 1</span>
+                            <button onclick="nextPage('phone')" id="phoneNextBtn" class="btn btn-secondary" disabled>
+                                Next <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                        <div class="viewer-tools">
+                            <button onclick="exportCurrentView('phone')" class="btn btn-outline">
+                                <i class="fas fa-download"></i> Export View
+                            </button>
+                            <button onclick="refreshData('phone')" class="btn btn-outline">
+                                <i class="fas fa-sync"></i> Refresh
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table id="phoneDataTable" class="data-table">
+                            <thead id="phoneTableHeader"></thead>
+                            <tbody id="phoneTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="phoneProcess" class="process-section hidden">
+                    <h3><i class="fas fa-phone"></i> ZabaSearch Phone Extraction</h3>
+                    <p>Extract missing phone numbers using ZabaSearch with intelligent formatting and processing.</p>
+
+                    <div class="input-group">
+                        <label for="phoneMaxRecords">Maximum Records to Process:</label>
+                        <input type="number" id="phoneMaxRecords" value="30" min="1" max="1000">
+                    </div>
+
+                    <button class="btn btn-primary" onclick="startPhoneExtraction()">
+                        <i class="fas fa-search"></i> Start Phone Extraction
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reverse Address Extractor Tab -->
+        <div id="address-processing" class="tab-content">
+            <div class="main-card">
+                <div class="upload-section">
+                    <h2>
+                        <i class="fas fa-upload"></i>
+                        Upload File for Reverse Address Extraction
+                    </h2>
+                    <div class="upload-area" onclick="document.getElementById('addressFileInput').click()">
+                        <div class="upload-icon">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                        </div>
+                        <div class="upload-text">Click to upload or drag and drop</div>
+                        <div class="upload-subtext">Reverse address lookup - finds records without names and extracts owner data</div>
+                    </div>
+                    <input type="file" id="addressFileInput" accept=".csv,.xlsx,.xls" style="display: none;">
+                </div>
+
+                <div id="addressFileInfo" class="file-info">
+                    <!-- File info will be populated here -->
+                </div>
+
+                <div id="addressStats" class="stats-grid">
+                    <!-- Stats will be populated here -->
+                </div>
+
+                <div id="addressDownloads" class="download-grid">
+                    <!-- Download links will be populated here -->
+                </div>
+
+                <div id="addressDataViewer" class="data-viewer hidden">
+                    <h3><i class="fas fa-table"></i> Data Preview</h3>
+                    <div class="viewer-controls">
+                        <div class="pagination-info">
+                            <span id="addressRecordCount">0 records</span>
+                        </div>
+                        <div class="pagination-controls">
+                            <button onclick="previousPage('address')" id="addressPrevBtn" class="btn btn-secondary" disabled>
+                                <i class="fas fa-chevron-left"></i> Previous
+                            </button>
+                            <span id="addressPageInfo">Page 1 of 1</span>
+                            <button onclick="nextPage('address')" id="addressNextBtn" class="btn btn-secondary" disabled>
+                                Next <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                        <div class="viewer-tools">
+                            <button onclick="exportCurrentView('address')" class="btn btn-outline">
+                                <i class="fas fa-download"></i> Export View
+                            </button>
+                            <button onclick="refreshData('address')" class="btn btn-outline">
+                                <i class="fas fa-sync"></i> Refresh
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table id="addressDataTable" class="data-table">
+                            <thead id="addressTableHeader"></thead>
+                            <tbody id="addressTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="addressProcess" class="process-section hidden">
+                    <h3><i class="fas fa-home"></i> BCPA Address & Owner Processing</h3>
+                    <p>Parses addresses from any format and enhances with BCPA property owner data. Results separated with/without phone numbers.</p>
+
+                    <div class="input-group">
+                        <label for="addressMaxRecords">Maximum Records to Process:</label>
+                        <input type="number" id="addressMaxRecords" value="30" min="1" max="1000">
+                    </div>
+
+                    <button class="btn btn-success" onclick="startAddressProcessing()">
+                        <i class="fas fa-search"></i> Start Reverse Address Extraction
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading" class="loading">
+        <div style="text-align: center;">
+            <i class="fas fa-spinner fa-spin" style="font-size: 3rem; margin-bottom: 20px;"></i>
+            <h3 id="loadingText">Processing...</h3>
+        </div>
+    </div>
+
+    <!-- Alerts Container -->
+    <div id="alerts" style="position: fixed; top: 20px; right: 20px; z-index: 1001; width: 400px;">
+        <!-- Alerts will be added here -->
+    </div>
+
+    <script>
+        // Global variables
+        let currentFileData = {};
+
+        // Tab Management
+        function showTab(tabId) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // Remove active class from all tab buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // Show selected tab
+            document.getElementById(tabId).classList.add('active');
+
+            // Add active class to clicked button
+            event.target.classList.add('active');
+        }
+
+        // File Upload Handlers
+        document.getElementById('phoneFileInput').addEventListener('change', function(e) {
+            handleFileUpload(e.target.files[0], 'phone');
+        });
+
+        document.getElementById('addressFileInput').addEventListener('change', function(e) {
+            handleFileUpload(e.target.files[0], 'address');
+        });
+
+        // Drag and Drop
+        document.querySelectorAll('.upload-area').forEach(area => {
+            area.addEventListener('dragover', handleDragOver);
+            area.addEventListener('dragleave', handleDragLeave);
+            area.addEventListener('drop', handleDrop);
+        });
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.currentTarget.classList.add('dragover');
+        }
+
+        function handleDragLeave(e) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('dragover');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('dragover');
+
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                const tabId = e.currentTarget.closest('.tab-content').id.includes('phone') ? 'phone' : 'address';
+                handleFileUpload(files[0], tabId);
+            }
+        }
+
+        // File Upload Processing
+        function handleFileUpload(file, tabType) {
+            if (!file) return;
+
+            // Validate file type
+            const allowedTypes = ['.csv', '.xlsx', '.xls'];
+            const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+
+            if (!allowedTypes.includes(fileExtension)) {
+                showAlert('Please upload a CSV or Excel file.', 'error');
+                return;
+            }
+
+            // Show file info
+            displayFileInfo(file, tabType);
+
+            // Upload file to server
+            uploadFileToServer(file, tabType);
+        }
+
+        function displayFileInfo(file, tabType) {
+            const fileInfoElement = document.getElementById(tabType + 'FileInfo');
+            fileInfoElement.innerHTML = `
+                <h4><i class="fas fa-file"></i> File Information</h4>
+                <p><strong>File:</strong> ${file.name}</p>
+                <p><strong>Size:</strong> ${(file.size / 1024).toFixed(2)} KB</p>
+                <p><strong>Type:</strong> ${file.type || 'Unknown'}</p>
+            `;
+            fileInfoElement.style.display = 'block';
+        }
+
+        function uploadFileToServer(file, tabType) {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('tabType', tabType);  // Send tab type to determine analysis type
+
+            showLoading('Analyzing your file...');
+
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                hideLoading();
+                if (data.error) {
+                    showAlert(data.error, 'error');
+                } else {
+                    currentFileData[tabType] = data;
+                    displayFileAnalysis(data, tabType);
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                console.error('Upload error:', error);
+                showAlert('Upload failed: ' + error.message, 'error');
+            });
+        }
+
+        function displayFileAnalysis(data, tabType) {
+            // Display statistics based on tab type
+            const statsElement = document.getElementById(tabType + 'Stats');
+            if (statsElement) {
+                if (tabType === 'phone') {
+                    // Phone extraction tab - show phone statistics
+                    statsElement.innerHTML = `
+                        <div class="stat-card">
+                            <div class="stat-number">${data.total_records}</div>
+                            <div class="stat-label">Total Records</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${data.phone_analysis.records_with_phone}</div>
+                            <div class="stat-label">With Phone Numbers</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${data.phone_analysis.records_without_phone}</div>
+                            <div class="stat-label">Without Phone Numbers</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${data.phone_analysis.phone_coverage}%</div>
+                            <div class="stat-label">Phone Coverage</div>
+                        </div>
+                    `;
+                } else if (tabType === 'address') {
+                    // Reverse address extractor tab - show name and address statistics
+                    statsElement.innerHTML = `
+                        <div class="stat-card">
+                            <div class="stat-number">${data.total_records}</div>
+                            <div class="stat-label">Total Records</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${data.address_analysis.records_without_names}</div>
+                            <div class="stat-label">Records Without Names</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${data.address_analysis.target_records_for_extraction}</div>
+                            <div class="stat-label">Target Records</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${data.address_analysis.records_with_address || 'N/A'}</div>
+                            <div class="stat-label">Valid Addresses</div>
+                        </div>
+                    `;
+                }
+            }
+
+            // Initialize data viewer
+            initializeDataViewer(data.filepath, tabType);
+
+            // Show process section
+            const processElement = document.getElementById(tabType + 'Process');
+            if (processElement) {
+                processElement.classList.remove('hidden');
+            }
+
+            // Generate separated files for download
+            generateSeparatedFiles(data, tabType);
+        }
+
+        function generateSeparatedFiles(data, tabType) {
+            const separateData = {
+                filepath: data.filepath,
+                tabType: tabType
+            };
+
+            fetch('/separate_records', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(separateData)
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (!result.error) {
+                    displayDownloadLinks(result, tabType);
+                }
+            })
+            .catch(error => {
+                console.log('Download preparation error:', error);
+            });
+        }
+
+        function displayDownloadLinks(result, tabType) {
+            const downloadsElement = document.getElementById(tabType + 'Downloads');
+            if (downloadsElement && result.files) {
+                downloadsElement.innerHTML = result.files.map(file => `
+                    <div class="download-card">
+                        <h3>
+                            ${file.type === 'with_phones' ? '<i class="fas fa-phone text-success"></i> Records With Phone' :
+                              file.type === 'without_phones' ? '<i class="fas fa-phone-slash text-warning"></i> Records Without Phone' :
+                              '<i class="fas fa-file text-primary"></i> Original File'}
+                        </h3>
+                        <p>${file.count} records</p>
+                        <a href="${file.download_url}" class="btn btn-primary" download>
+                            <i class="fas fa-download"></i> Download
+                        </a>
+                    </div>
+                `).join('');
+            }
+        }
+
+        // Processing Functions
+        function startPhoneExtraction() {
+            const maxRecords = document.getElementById('phoneMaxRecords').value || 30;
+            processFile('phone', maxRecords);
+        }
+
+        function startAddressProcessing() {
+            const maxRecords = document.getElementById('addressMaxRecords').value || 30;
+            processFile('address', maxRecords);
+        }
+
+        function processFile(tabType, maxRecords) {
+            const fileData = currentFileData[tabType];
+            if (!fileData) {
+                showAlert('Please upload a file first', 'error');
+                return;
+            }
+
+            const processData = {
+                filepath: fileData.filepath,
+                analysis_type: tabType,
+                max_records: maxRecords
+            };
+
+            showLoading(`Starting ${tabType} processing for up to ${maxRecords} records...`);
+
+            fetch('/analyze', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(processData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                if (data.error) {
+                    showAlert(data.error, 'error');
+                } else {
+                    // Show success message with merge option
+                    showProcessingSuccess(data, tabType);
+
+                    if (data.download_url) {
+                        // Auto download result file
+                        const link = document.createElement('a');
+                        link.href = data.download_url;
+                        link.download = data.output_file || 'results.csv';
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    }
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                showAlert('Processing failed: ' + error.message, 'error');
+            });
+        }
+
+        // Utility Functions
+        function showLoading(text = 'Processing...') {
+            const loadingElement = document.getElementById('loading');
+            const loadingText = document.getElementById('loadingText');
+            if (loadingElement && loadingText) {
+                loadingText.textContent = text;
+                loadingElement.classList.add('show');
+            }
+        }
+
+        function hideLoading() {
+            const loadingElement = document.getElementById('loading');
+            if (loadingElement) {
+                loadingElement.classList.remove('show');
+            }
+        }
+
+        function showAlert(message, type = 'info') {
+            const alertsContainer = document.getElementById('alerts');
+            if (alertsContainer) {
+                const alertDiv = document.createElement('div');
+                alertDiv.className = `alert alert-${type}`;
+                alertDiv.innerHTML = `
+                    <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+                    ${message}
+                    <button onclick="this.parentElement.remove()" style="float: right; background: none; border: none; font-size: 1.2rem; cursor: pointer;">&times;</button>
+                `;
+                alertsContainer.appendChild(alertDiv);
+
+                // Auto remove after 10 seconds for success messages
+                if (type === 'success') {
+                    setTimeout(() => {
+                        if (alertDiv.parentElement) {
+                            alertDiv.remove();
+                        }
+                    }, 10000);
+                }
+            }
+        }
+
+        // Store processed file data for merge functionality
+        let processedResults = {
+            phone: null,
+            address: null
+        };
+
+        function showProcessingSuccess(data, tabType) {
+            // Store processed result info for merge functionality
+            processedResults[tabType] = {
+                processedFile: data.output_file,
+                downloadUrl: data.download_url,
+                originalFile: currentFileData[tabType] ? currentFileData[tabType].filepath : null
+            };
+
+            // Create enhanced success message with merge option
+            const alertsContainer = document.getElementById('alerts');
+            if (alertsContainer) {
+                const alertDiv = document.createElement('div');
+                alertDiv.className = 'alert alert-success';
+                alertDiv.innerHTML = `
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <div>
+                            <i class="fas fa-check-circle"></i>
+                            ${data.message}
+                        </div>
+                        <div style="display: flex; gap: 10px;">
+                            <button onclick="mergeProcessedFile('${tabType}')"
+                                    style="background: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
+                                <i class="fas fa-merge"></i> Merge Back to Original
+                            </button>
+                            <button onclick="this.closest('.alert').remove()"
+                                    style="background: none; border: none; font-size: 1.2rem; cursor: pointer;">&times;</button>
+                        </div>
+                    </div>
+                `;
+                alertsContainer.appendChild(alertDiv);
+            }
+        }
+
+        function mergeProcessedFile(tabType) {
+            const resultData = processedResults[tabType];
+            if (!resultData || !resultData.originalFile || !resultData.processedFile) {
+                showAlert('Missing file information for merge operation', 'error');
+                return;
+            }
+
+            showLoading('Merging processed results back into original file...');
+
+            const mergeData = {
+                original_filepath: resultData.originalFile,
+                processed_filepath: resultData.processedFile.includes('/') ?
+                    resultData.processedFile :
+                    `results/${resultData.processedFile}`
+            };
+
+            fetch('/merge_files', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(mergeData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                if (data.error) {
+                    showAlert(data.error, 'error');
+                } else {
+                    // Show detailed merge results
+                    const summary = data.summary || {};
+                    const message = `
+                        <strong>🎉 Smart Merge Completed!</strong><br>
+                        📊 <strong>${summary.records_updated || 0}</strong> records updated with new owner data<br>
+                        📝 <strong>${summary.records_unchanged || 0}</strong> records unchanged<br>
+                        ➕ <strong>${summary.new_records_added || 0}</strong> new records added<br>
+                        📁 Total: <strong>${summary.total_final_records || 0}</strong> records in merged file
+                    `;
+                    showAlert(message, 'success');
+
+                    if (data.download_url) {
+                        // Auto download merged file
+                        const link = document.createElement('a');
+                        link.href = data.download_url;
+                        link.download = data.output_file || 'updated_file.csv';
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    }
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                showAlert('Merge failed: ' + error.message, 'error');
+            });
+        }
+
+        // Data Viewer Functions
+        let dataViewerStates = {
+            phone: { currentPage: 1, totalPages: 1, totalRecords: 0, filepath: null },
+            address: { currentPage: 1, totalPages: 1, totalRecords: 0, filepath: null }
+        };
+
+        function initializeDataViewer(filepath, tabType) {
+            dataViewerStates[tabType].filepath = filepath;
+            dataViewerStates[tabType].currentPage = 1;
+
+            // Show the data viewer
+            const viewerElement = document.getElementById(tabType + 'DataViewer');
+            if (viewerElement) {
+                viewerElement.classList.remove('hidden');
+            }
+
+            // Load first page
+            loadDataPage(tabType, 1);
+        }
+
+        function loadDataPage(tabType, page) {
+            if (!dataViewerStates[tabType].filepath) return;
+
+            const data = {
+                filepath: dataViewerStates[tabType].filepath,
+                page: page,
+                per_page: 50
+            };
+
+            fetch('/fetch_data', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (!result.error) {
+                    displayTableData(tabType, result);
+                    updatePagination(tabType, result.pagination);
+                } else {
+                    showAlert(result.error, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error loading data:', error);
+                showAlert('Error loading data', 'error');
+            });
+        }
+
+        function displayTableData(tabType, data) {
+            const headerElement = document.getElementById(tabType + 'TableHeader');
+            const bodyElement = document.getElementById(tabType + 'TableBody');
+
+            // Create header
+            headerElement.innerHTML = '';
+            if (data.columns && data.columns.length > 0) {
+                const headerRow = document.createElement('tr');
+                data.columns.forEach(column => {
+                    const th = document.createElement('th');
+                    th.textContent = column;
+                    headerRow.appendChild(th);
+                });
+                headerElement.appendChild(headerRow);
+            }
+
+            // Create body rows
+            bodyElement.innerHTML = '';
+            if (data.rows && data.rows.length > 0) {
+                data.rows.forEach(row => {
+                    const tr = document.createElement('tr');
+                    data.columns.forEach(column => {
+                        const td = document.createElement('td');
+                        td.textContent = row[column] || '';
+                        tr.appendChild(td);
+                    });
+                    bodyElement.appendChild(tr);
+                });
+            }
+        }
+
+        function updatePagination(tabType, pagination) {
+            dataViewerStates[tabType].currentPage = pagination.page;
+            dataViewerStates[tabType].totalPages = pagination.total_pages;
+            dataViewerStates[tabType].totalRecords = pagination.total_records;
+
+            // Update record count
+            const recordCountElement = document.getElementById(tabType + 'RecordCount');
+            if (recordCountElement) {
+                recordCountElement.textContent = `${pagination.total_records} records`;
+            }
+
+            // Update page info
+            const pageInfoElement = document.getElementById(tabType + 'PageInfo');
+            if (pageInfoElement) {
+                pageInfoElement.textContent = `Page ${pagination.page} of ${pagination.total_pages}`;
+            }
+
+            // Update navigation buttons
+            const prevBtn = document.getElementById(tabType + 'PrevBtn');
+            const nextBtn = document.getElementById(tabType + 'NextBtn');
+
+            if (prevBtn) {
+                prevBtn.disabled = !pagination.has_prev;
+            }
+
+            if (nextBtn) {
+                nextBtn.disabled = !pagination.has_next;
+            }
+        }
+
+        function previousPage(tabType) {
+            const currentPage = dataViewerStates[tabType].currentPage;
+            if (currentPage > 1) {
+                loadDataPage(tabType, currentPage - 1);
+            }
+        }
+
+        function nextPage(tabType) {
+            const currentPage = dataViewerStates[tabType].currentPage;
+            const totalPages = dataViewerStates[tabType].totalPages;
+            if (currentPage < totalPages) {
+                loadDataPage(tabType, currentPage + 1);
+            }
+        }
+
+        function refreshData(tabType) {
+            const currentPage = dataViewerStates[tabType].currentPage;
+            loadDataPage(tabType, currentPage);
+        }
+
+        function exportCurrentView(tabType) {
+            if (!dataViewerStates[tabType].filepath) {
+                showAlert('No data loaded to export', 'error');
+                return;
+            }
+
+            // Create download link for current file
+            const filename = dataViewerStates[tabType].filepath.split('\\').pop().split('/').pop();
+            const downloadUrl = `/download/${filename}`;
+
+            // Create temporary link and click it
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>

@@ -399,6 +399,84 @@ class CSVFormatHandler:
             logger.error(f"Error filtering records: {e}")
             return [], []
 
+def process_file(csv_path: str) -> pd.DataFrame:
+    """
+    Process file for Flask integration - returns standardized DataFrame
+
+    Args:
+        csv_path: Path to input CSV file
+
+    Returns:
+        pd.DataFrame: Processed dataframe
+    """
+    try:
+        handler = CSVFormatHandler()
+
+        # Read the file with encoding detection
+        encodings = ['utf-8', 'latin1', 'cp1252']
+        df = None
+
+        for encoding in encodings:
+            try:
+                if csv_path.endswith(('.xlsx', '.xls')):
+                    df = pd.read_excel(csv_path)
+                else:
+                    # First try reading normally
+                    df = pd.read_csv(csv_path, encoding=encoding)
+
+                    # Check if we got "Unnamed" columns (indicates missing headers)
+                    unnamed_cols = [col for col in df.columns if col.startswith('Unnamed:')]
+                    if len(unnamed_cols) > len(df.columns) * 0.5:  # More than half are unnamed
+                        logger.info(f"⚠️ Detected file without headers - attempting to infer structure")
+
+                        # Try reading without header and infer column names
+                        df_no_header = pd.read_csv(csv_path, encoding=encoding, header=None)
+
+                        # Check if first row looks like data (has names/addresses)
+                        first_row = df_no_header.iloc[0].astype(str).tolist()
+                        if any(re.search(r'[A-Za-z]{3,}', str(val)) for val in first_row[:3]):
+                            # First row contains data, create meaningful headers
+                            num_cols = len(df_no_header.columns)
+
+                            # Infer column names based on content patterns
+                            inferred_headers = []
+                            for i, col_data in enumerate(df_no_header.iloc[:, :min(10, num_cols)].columns):
+                                col_values = df_no_header.iloc[:5, i].astype(str).tolist()
+                                col_sample = ' '.join(col_values).upper()
+
+                                # Infer column type based on content
+                                if any(name_pattern in col_sample for name_pattern in ['LLC', 'INC', 'CORP', '&', 'TRUST', 'TR', 'ETAL']):
+                                    inferred_headers.append(f'Owner Name {len([h for h in inferred_headers if "Owner Name" in h]) + 1}')
+                                elif re.search(r'\d+.*\b(ST|AVE|RD|DR|CT|PL|WAY|BLVD|LN)\b', col_sample):
+                                    inferred_headers.append('Street Address')
+                                elif any(city in col_sample for city in ['BEACH', 'CITY', 'TOWN', 'PARK']):
+                                    inferred_headers.append('City')
+                                elif re.search(r'\b(FL|CA|NY|TX)\b', col_sample):
+                                    inferred_headers.append('State')
+                                elif re.search(r'\d{5}', col_sample):
+                                    inferred_headers.append('Zip Code')
+                                else:
+                                    inferred_headers.append(f'Column_{i+1}')
+
+                            # Apply inferred headers
+                            df_no_header.columns = inferred_headers + [f'Column_{i+1}' for i in range(len(inferred_headers), num_cols)]
+                            df = df_no_header
+                            logger.info(f"✅ Applied inferred headers: {inferred_headers[:5]}...")
+
+                logger.info(f"Successfully read file with {encoding} encoding")
+                break
+            except:
+                continue
+
+        if df is None:
+            raise ValueError("Could not read file with any standard encoding")
+
+        logger.info(f"Loaded {len(df)} records from {csv_path}")
+        return df
+
+    except Exception as e:
+        logger.error(f"Error processing file: {e}")
+        raise
 
 def main():
     """Test the CSV format handler"""

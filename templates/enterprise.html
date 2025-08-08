@@ -539,9 +539,10 @@
             const formData = new FormData();
             formData.append('file', file);
 
-            showLoading('Analyzing your file...');
+            showLoading('Uploading and analyzing your file...');
 
-            fetch('/analyze', {
+            // First upload the file
+            fetch('/upload', {
                 method: 'POST',
                 body: formData
             })
@@ -551,8 +552,9 @@
                 if (data.error) {
                     showAlert(data.error, 'error');
                 } else {
-                    currentFileId = data.file_id;
-                    displayAnalysisResults(data);
+                    // Store file info and display results
+                    currentFileData = data;
+                    displayFileAnalysis(data);
                 }
             })
             .catch(error => {
@@ -561,176 +563,208 @@
             });
         }
 
-        function displayAnalysisResults(data) {
-            const stats = data.stats;
-            const downloadUrls = data.download_urls;
-
-            // Show analysis section
-            analysisSection.style.display = 'block';
-
-            // Populate stats
-            const statsGrid = document.getElementById('statsGrid');
-            statsGrid.innerHTML = `
-                <div class="stat-card">
-                    <div class="stat-number">${stats.total_records}</div>
-                    <div class="stat-label">Total Records</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">${stats.has_phone}</div>
-                    <div class="stat-label">With Phone Numbers</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">${stats.no_phone}</div>
-                    <div class="stat-label">Without Phone Numbers</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">${stats.phone_percentage.toFixed(1)}%</div>
-                    <div class="stat-label">Phone Coverage</div>
-                </div>
+        function displayFileAnalysis(data) {
+            // Show file information
+            const fileInfo = document.querySelector('.file-info');
+            fileInfo.innerHTML = `
+                <h4><i class="fas fa-file"></i> File Information</h4>
+                <p><strong>File:</strong> ${data.original_filename}</p>
+                <p><strong>Size:</strong> ${data.file_size_kb} KB</p>
+                <p><strong>Type:</strong> ${data.file_type}</p>
             `;
+            fileInfo.style.display = 'block';
 
-            // Populate download links if available
-            const downloadGrid = document.getElementById('downloadGrid');
-            const downloadSection = document.getElementById('downloadSection');
-            
-            if (Object.keys(downloadUrls).length > 0) {
-                let downloadHTML = '';
+            // Show analysis results
+            const analysisSection = document.querySelector('.analysis-results');
+            if (analysisSection) {
+                analysisSection.style.display = 'block';
                 
-                if (downloadUrls.with_phone) {
-                    downloadHTML += `
-                        <div class="download-card">
-                            <h3><i class="fas fa-phone text-success"></i> Records With Phone</h3>
-                            <p>${stats.has_phone} records</p>
-                            <a href="${downloadUrls.with_phone}" class="btn btn-success">
-                                <i class="fas fa-download"></i> Download
-                            </a>
+                // Populate stats
+                const statsGrid = document.getElementById('statsGrid');
+                if (statsGrid) {
+                    statsGrid.innerHTML = `
+                        <div class="stat-card">
+                            <div class="stat-number">${data.total_records}</div>
+                            <div class="stat-label">Total Records</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${data.phone_analysis.records_with_phone}</div>
+                            <div class="stat-label">With Phone Numbers</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${data.phone_analysis.records_without_phone}</div>
+                            <div class="stat-label">Without Phone Numbers</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${data.phone_analysis.phone_coverage}%</div>
+                            <div class="stat-label">Phone Coverage</div>
                         </div>
                     `;
                 }
-                
-                if (downloadUrls.without_phone) {
-                    downloadHTML += `
-                        <div class="download-card">
-                            <h3><i class="fas fa-phone-slash text-warning"></i> Records Without Phone</h3>
-                            <p>${stats.no_phone} records</p>
-                            <a href="${downloadUrls.without_phone}" class="btn">
-                                <i class="fas fa-download"></i> Download
-                            </a>
-                        </div>
-                    `;
-                }
-                
-                downloadGrid.innerHTML = downloadHTML;
-                downloadSection.style.display = 'block';
-            } else {
-                downloadSection.style.display = 'none';
             }
 
-            showAlert(`Analysis complete! Found ${stats.total_records} total records. Phone column used: ${stats.phone_column_used}`, 'success');
+            // Show download options
+            showDownloadOptions(data);
+            
+            // Show data enhancement services
+            showDataServices(data);
         }
 
-        function startProcessing(service) {
-            if (!currentFileId) {
-                showAlert('Please upload a file first', 'error');
-                return;
-            }
-
-            const maxRecords = service === 'phone' ? 
-                document.getElementById('maxRecordsPhone').value : 
-                document.getElementById('maxRecordsProperty').value;
-
-            const btnId = service === 'phone' ? 'phoneBtn' : 'propertyBtn';
-            const btn = document.getElementById(btnId);
-            
-            // Disable button and show loading
-            btn.disabled = true;
-            btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Processing...`;
-            showLoading(`Starting ${service} search for up to ${maxRecords} records...`);
-
-            const requestData = {
-                service: service,
-                file_id: currentFileId,
-                max_records: parseInt(maxRecords)
+        function showDownloadOptions(data) {
+            // Create separated files for download
+            const separateData = {
+                filepath: data.filepath,
+                analysis_type: 'separate'
             };
-
-            fetch('/process_direct', {
+            
+            fetch('/separate_phones', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(requestData)
+                body: JSON.stringify(separateData)
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (!result.error) {
+                    displayDownloadSection(result);
+                }
+            })
+            .catch(error => {
+                console.log('Download preparation error:', error);
+            });
+        }
+
+        function displayDownloadSection(result) {
+            const downloadSection = document.getElementById('downloadSection');
+            if (downloadSection) {
+                downloadSection.style.display = 'block';
+                
+                const downloadGrid = document.getElementById('downloadGrid');
+                if (downloadGrid) {
+                    downloadGrid.innerHTML = result.files.map(file => `
+                        <div class="download-card">
+                            <h3>
+                                ${file.type === 'with_phones' ? '<i class="fas fa-phone text-success"></i> Records With Phone' : 
+                                  file.type === 'without_phones' ? '<i class="fas fa-phone-slash text-warning"></i> Records Without Phone' : 
+                                  '<i class="fas fa-file text-primary"></i> Original File'}
+                            </h3>
+                            <p>${file.count} records</p>
+                            <a href="${file.download_url}" class="btn btn-download" download>
+                                <i class="fas fa-download"></i> Download
+                            </a>
+                        </div>
+                    `).join('');
+                }
+            }
+        }
+
+        function showDataServices(data) {
+            const servicesSection = document.getElementById('dataServices');
+            if (servicesSection) {
+                servicesSection.style.display = 'block';
+            }
+            
+            // Store current file data for processing
+            window.currentFileData = data;
+        }
+
+        // Data enhancement service handlers
+        function startPhoneSearch() {
+            const maxRecords = document.getElementById('phoneMaxRecords').value || 30;
+            if (!window.currentFileData) {
+                showAlert('Please upload a file first', 'error');
+                return;
+            }
+            
+            performDataSearch('phone', maxRecords);
+        }
+
+        function startAddressSearch() {
+            const maxRecords = document.getElementById('addressMaxRecords').value || 30;
+            if (!window.currentFileData) {
+                showAlert('Please upload a file first', 'error');
+                return;
+            }
+            
+            performDataSearch('address', maxRecords);
+        }
+
+        function performDataSearch(analysisType, maxRecords) {
+            const searchData = {
+                filepath: window.currentFileData.filepath,
+                analysis_type: analysisType,
+                max_records: maxRecords
+            };
+
+            showLoading(`Starting ${analysisType} search for up to ${maxRecords} records...`);
+
+            fetch('/analyze', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(searchData)
             })
             .then(response => response.json())
             .then(data => {
                 hideLoading();
-                
-                // Re-enable button
-                btn.disabled = false;
-                btn.innerHTML = service === 'phone' ? 
-                    '<i class="fas fa-search"></i> Start Phone Search' : 
-                    '<i class="fas fa-search"></i> Start Property Search';
-
-                if (data.success) {
-                    showAlert(`${service.charAt(0).toUpperCase() + service.slice(1)} search completed successfully! Processed ${data.records_processed} records.`, 'success');
-                    
-                    // Add download button for results
-                    const alertDiv = document.querySelector('#alerts .alert-success:last-child');
-                    if (alertDiv && data.download_url) {
-                        alertDiv.innerHTML += `<br><br><a href="${data.download_url}" class="btn btn-success"><i class="fas fa-download"></i> Download Results (${data.filename})</a>`;
-                    }
+                if (data.error) {
+                    showAlert(data.error, 'error');
                 } else {
-                    showAlert(`${service.charAt(0).toUpperCase() + service.slice(1)} search failed: ${data.error}`, 'error');
+                    showAlert(data.message, 'success');
+                    if (data.download_url) {
+                        // Create download link
+                        const downloadLink = document.createElement('a');
+                        downloadLink.href = data.download_url;
+                        downloadLink.download = data.output_file || 'results.csv';
+                        downloadLink.click();
+                    }
                 }
             })
             .catch(error => {
                 hideLoading();
-                
-                // Re-enable button
-                btn.disabled = false;
-                btn.innerHTML = service === 'phone' ? 
-                    '<i class="fas fa-search"></i> Start Phone Search' : 
-                    '<i class="fas fa-search"></i> Start Property Search';
-                    
-                showAlert(`${service.charAt(0).toUpperCase() + service.slice(1)} search failed: ${error.message}`, 'error');
+                showAlert('Search failed: ' + error.message, 'error');
             });
         }
 
+        // Utility functions
         function showLoading(text = 'Processing...') {
-            document.getElementById('loadingText').textContent = text;
-            document.getElementById('loading').style.display = 'block';
+            const loadingElement = document.getElementById('loading');
+            if (loadingElement) {
+                document.getElementById('loadingText').textContent = text;
+                loadingElement.style.display = 'block';
+            }
         }
 
         function hideLoading() {
-            document.getElementById('loading').style.display = 'none';
+            const loadingElement = document.getElementById('loading');
+            if (loadingElement) {
+                loadingElement.style.display = 'none';
+            }
         }
 
         function showAlert(message, type = 'info') {
             const alertsContainer = document.getElementById('alerts');
-            const alertDiv = document.createElement('div');
-            alertDiv.className = `alert alert-${type}`;
-            alertDiv.innerHTML = `
-                <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
-                ${message}
-                <button onclick="this.parentElement.remove()" style="float: right; background: none; border: none; font-size: 1.2rem; cursor: pointer;">&times;</button>
-            `;
-            alertsContainer.appendChild(alertDiv);
+            if (alertsContainer) {
+                const alertDiv = document.createElement('div');
+                alertDiv.className = `alert alert-${type}`;
+                alertDiv.innerHTML = `
+                    <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+                    ${message}
+                    <button onclick="this.parentElement.remove()" style="float: right; background: none; border: none; font-size: 1.2rem; cursor: pointer;">&times;</button>
+                `;
+                alertsContainer.appendChild(alertDiv);
 
-            // Auto remove after 10 seconds for success messages
-            if (type === 'success') {
-                setTimeout(() => {
-                    if (alertDiv.parentElement) {
-                        alertDiv.remove();
-                    }
-                }, 10000);
+                // Auto remove after 10 seconds for success messages
+                if (type === 'success') {
+                    setTimeout(() => {
+                        if (alertDiv.parentElement) {
+                            alertDiv.remove();
+                        }
+                    }, 10000);
+                }
             }
-        }
-
-        function formatFileSize(bytes) {
-            if (bytes === 0) return '0 Bytes';
-            const k = 1024;
-            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
     </script>
 </body>
