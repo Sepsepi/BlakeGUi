@@ -46,3 +46,49 @@ Thumbs.db
 
 # Test outputs
 test_output_*.csv
+
+# Secrets and configuration files
+.env
+.env.*
+config.py
+secrets/
+*.key
+*.pem
+credentials.json
+auth.json
+
+# Setup and deployment scripts containing secrets
+1_setup_proxy.sh
+2_start_server.sh
+setup_server.sh
+*_setup*.sh
+*_deploy*.sh
+
+# Output files that may contain sensitive data
+output/
+temp/
+logs/
+
+# Server IP addresses and deployment configs
+*production*
+*server*config*
+deploy*
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Backup files
+*.backup
+*.bak
+
+# Local environment files
+local_settings.py
+local_config.py
+
+# Files that may contain API keys or tokens
+*secret*
+*token*
+*auth*
+*credential*
