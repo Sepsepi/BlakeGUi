@@ -10,9 +10,17 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-        }
-        
-        body {
+                               <div class="process-card">
+                            <div class="process-icon">
+                                <i class="fas fa-home"></i>
+                            </div>
+                            <h3>Property Information</h3>
+                            <p>Enhance records with detailed property information</p>
+                            
+                            <button class="btn" onclick="startAddressSearch()" id="propertyBtn">
+                                <i class="fas fa-home"></i> Start Property Search
+                            </button>
+                        </div>      body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
@@ -422,16 +430,11 @@
                             <div class="process-icon">
                                 <i class="fas fa-phone"></i>
                             </div>
-                            <h3>Phone Number Search</h3>
+                            <h3>Phone Extraction</h3>
                             <p>Find phone numbers for records using advanced web scraping</p>
                             
-                            <div class="input-group">
-                                <label for="maxRecordsPhone">Maximum Records to Process:</label>
-                                <input type="number" id="maxRecordsPhone" value="10" min="1" max="1000">
-                            </div>
-                            
-                            <button class="btn" onclick="startProcessing('phone')" id="phoneBtn">
-                                <i class="fas fa-search"></i> Start Phone Search
+                            <button class="btn" onclick="startPhoneSearch()" id="phoneBtn">
+                                <i class="fas fa-search"></i> Start Phone Extraction
                             </button>
                         </div>
 
@@ -443,11 +446,11 @@
                             <p>Enhance records with detailed property information</p>
                             
                             <div class="input-group">
-                                <label for="maxRecordsProperty">Maximum Records to Process:</label>
-                                <input type="number" id="maxRecordsProperty" value="10" min="1" max="1000">
+                                <label for="addressMaxRecords">Maximum Records to Process:</label>
+                                <input type="number" id="addressMaxRecords" value="30" min="1" max="1000">
                             </div>
                             
-                            <button class="btn" onclick="startProcessing('property')" id="propertyBtn">
+                            <button class="btn" onclick="startAddressSearch()" id="propertyBtn">
                                 <i class="fas fa-search"></i> Start Property Search
                             </button>
                         </div>
@@ -671,33 +674,30 @@
 
         // Data enhancement service handlers
         function startPhoneSearch() {
-            const maxRecords = document.getElementById('phoneMaxRecords').value || 30;
             if (!window.currentFileData) {
                 showAlert('Please upload a file first', 'error');
                 return;
             }
             
-            performDataSearch('phone', maxRecords);
+            performDataSearch('phone');
         }
 
         function startAddressSearch() {
-            const maxRecords = document.getElementById('addressMaxRecords').value || 30;
             if (!window.currentFileData) {
                 showAlert('Please upload a file first', 'error');
                 return;
             }
             
-            performDataSearch('address', maxRecords);
+            performDataSearch('address');
         }
 
-        function performDataSearch(analysisType, maxRecords) {
+        function performDataSearch(analysisType) {
             const searchData = {
                 filepath: window.currentFileData.filepath,
-                analysis_type: analysisType,
-                max_records: maxRecords
+                analysis_type: analysisType
             };
 
-            showLoading(`Starting ${analysisType} search for up to ${maxRecords} records...`);
+            showLoading(`Starting ${analysisType} search...`);
 
             fetch('/analyze', {
                 method: 'POST',
@@ -711,14 +711,21 @@
                 hideLoading();
                 if (data.error) {
                     showAlert(data.error, 'error');
+                } else if (data.batch_processing) {
+                    // Show batch processing notification
+                    showAlert(`Large dataset processing initiated! ${data.total_records} records will be processed in ${data.batch_count} separate terminals for optimal performance. You can monitor progress in the terminal windows.`, 'info');
                 } else {
-                    showAlert(data.message, 'success');
+                    // Check if merge was completed automatically
+                    if (data.merge_completed) {
+                        // NO MERGE NOTIFICATION - only show download is ready
+                        // showAlert removed for automatic merge
+                    } else {
+                        showAlert(data.message, 'success');
+                    }
+                    
                     if (data.download_url) {
-                        // Create download link
-                        const downloadLink = document.createElement('a');
-                        downloadLink.href = data.download_url;
-                        downloadLink.download = data.output_file || 'results.csv';
-                        downloadLink.click();
+                        // Create prominent download notification
+                        createDownloadNotification(data.download_url, data.output_file, data.merge_completed);
                     }
                 }
             })
@@ -726,6 +733,75 @@
                 hideLoading();
                 showAlert('Search failed: ' + error.message, 'error');
             });
+        }
+
+        function createDownloadNotification(downloadUrl, fileName, isMerged = false) {
+            // Remove any existing download notifications
+            const existingNotification = document.getElementById('download-notification');
+            if (existingNotification) {
+                existingNotification.remove();
+            }
+
+            // Create download notification
+            const notification = document.createElement('div');
+            notification.id = 'download-notification';
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: ${isMerged ? '#28a745' : '#007bff'};
+                color: white;
+                padding: 20px;
+                border-radius: 10px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                z-index: 1000;
+                max-width: 350px;
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            `;
+            
+            notification.innerHTML = `
+                <div style="display: flex; align-items: center; margin-bottom: 15px;">
+                    <i class="fas fa-${isMerged ? 'check-circle' : 'download'}" style="font-size: 24px; margin-right: 10px;"></i>
+                    <div>
+                        <h4 style="margin: 0; font-size: 16px;">${isMerged ? 'Merge Complete!' : 'Download Ready'}</h4>
+                        <p style="margin: 5px 0 0 0; font-size: 12px; opacity: 0.9;">${fileName}</p>
+                    </div>
+                </div>
+                <button onclick="window.open('${downloadUrl}', '_blank')" style="
+                    width: 100%;
+                    padding: 12px;
+                    background: rgba(255,255,255,0.2);
+                    border: 1px solid rgba(255,255,255,0.3);
+                    color: white;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 14px;
+                    font-weight: bold;
+                    transition: background 0.3s;
+                " onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                    <i class="fas fa-download"></i> Download File
+                </button>
+                <button onclick="this.parentElement.remove()" style="
+                    position: absolute;
+                    top: 10px;
+                    right: 10px;
+                    background: none;
+                    border: none;
+                    color: white;
+                    font-size: 18px;
+                    cursor: pointer;
+                    padding: 5px;
+                ">&times;</button>
+            `;
+
+            document.body.appendChild(notification);
+
+            // Auto-remove after 30 seconds
+            setTimeout(() => {
+                if (notification.parentElement) {
+                    notification.remove();
+                }
+            }, 30000);
         }
 
         // Utility functions

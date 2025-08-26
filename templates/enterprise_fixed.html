@@ -150,6 +150,80 @@
             font-size: 0.95rem;
         }
 
+        /* Recent Files Section */
+        .recent-files-section {
+            margin-bottom: 30px;
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 25px;
+            border: 1px solid #e9ecef;
+        }
+
+        .recent-files-section h3 {
+            color: #333;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .recent-files-list {
+            display: grid;
+            gap: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .recent-file-item {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            border: 1px solid #dee2e6;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .recent-file-item:hover {
+            border-color: #667eea;
+            transform: translateY(-1px);
+            box-shadow: 0 5px 15px rgba(102,126,234,0.2);
+        }
+
+        .recent-file-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .recent-file-info {
+            font-size: 0.9rem;
+            color: #666;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .recent-file-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .recent-file-actions .btn {
+            padding: 5px 15px;
+            font-size: 0.8rem;
+        }
+
+        .no-recent-files {
+            text-align: center;
+            color: #666;
+            padding: 30px;
+            font-style: italic;
+        }
+
         .file-info {
             background: #f8f9fa;
             border-radius: 10px;
@@ -290,7 +364,7 @@
         }
 
         .loading {
-            display: none;
+            display: none !important; /* Disable overlay completely */
             position: fixed;
             top: 0;
             left: 0;
@@ -304,7 +378,27 @@
         }
 
         .loading.show {
-            display: flex;
+            display: none !important; /* Force disable overlay */
+        }
+
+        /* Local Processing Indicator Styles */
+        .local-processing {
+            animation: processingPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes processingPulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.02); opacity: 0.95; }
+        }
+
+        .progress-bar-animated {
+            animation: progressMove 3s linear infinite;
+        }
+
+        @keyframes progressMove {
+            0% { width: 0%; }
+            50% { width: 70%; }
+            100% { width: 100%; }
         }
 
         .alert {
@@ -377,39 +471,112 @@
             margin-bottom: 20px;
             flex-wrap: wrap;
             gap: 15px;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
         }
 
         .pagination-info {
             color: #666;
             font-weight: 500;
+            min-width: 120px;
         }
 
         .pagination-controls {
             display: flex;
             align-items: center;
             gap: 15px;
+            flex-wrap: wrap;
         }
 
         .pagination-controls span {
             font-weight: 500;
             color: #333;
+            min-width: 100px;
+            text-align: center;
+        }
+
+        .pagination-controls button {
+            min-width: 80px;
+            padding: 8px 16px;
+            font-size: 0.9rem;
         }
 
         .viewer-tools {
             display: flex;
             gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .viewer-tools button {
+            font-size: 0.85rem;
+            padding: 8px 12px;
         }
 
         .table-container {
             overflow-x: auto;
+            overflow-y: auto;
             border-radius: 10px;
             box-shadow: 0 0 10px rgba(0,0,0,0.05);
+            max-height: 600px;
+            /* Enable smooth scrolling and touch support */
+            scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
+            /* Custom scrollbar styling */
+            scrollbar-width: thin;
+            scrollbar-color: #667eea #f1f1f1;
+            /* Enhanced interaction for all devices */
+            touch-action: auto; /* Changed back to auto for natural scrolling */
+            overscroll-behavior: contain;
+            /* Improve scrolling responsiveness */
+            overflow: auto; /* Ensure scrolling works on all axes */
+        }
+
+        .table-container:active {
+            cursor: grabbing;
+        }
+
+        /* Make table content scrollable */
+        .table-container * {
+            touch-action: auto; /* Allow natural scrolling */
+        }
+
+        /* Webkit scrollbar styling */
+        .table-container::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        .table-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+
+        .table-container::-webkit-scrollbar-thumb {
+            background: #667eea;
+            border-radius: 4px;
+        }
+
+        .table-container::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* Touch-friendly table cells */
+        .data-table td, .data-table th {
+            position: relative;
+            transition: background-color 0.2s ease;
+        }
+
+        /* Add visual feedback for touch interactions */
+        .table-container:active {
+            background-color: rgba(102, 126, 234, 0.05);
         }
 
         .data-table {
             width: 100%;
             border-collapse: collapse;
             background: white;
+            min-width: 600px; /* Minimum width to prevent cramping */
         }
 
         .data-table th {
@@ -421,11 +588,27 @@
             position: sticky;
             top: 0;
             z-index: 10;
+            white-space: nowrap; /* Prevent header text wrapping */
+            min-width: 120px; /* Minimum column width */
         }
 
         .data-table td {
             padding: 12px 10px;
             border-bottom: 1px solid #eee;
+            max-width: 200px; /* Prevent super wide cells */
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* Allow text expansion on hover */
+        .data-table td:hover {
+            white-space: normal;
+            overflow: visible;
+            word-wrap: break-word;
+            background-color: #f0f4ff;
+            position: relative;
+            z-index: 5;
         }
 
         .data-table tbody tr:hover {
@@ -467,12 +650,115 @@
                 font-size: 0.9rem;
             }
         }
+
+        /* Loading Overlay */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .loading-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .loading-content {
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 6px solid #f3f3f3;
+            border-top: 6px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            font-size: 1.2rem;
+            color: #333;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .loading-subtext {
+            font-size: 0.9rem;
+            color: #666;
+            line-height: 1.4;
+        }
+
+        .loading-progress {
+            width: 100%;
+            height: 4px;
+            background: #f0f0f0;
+            border-radius: 2px;
+            margin-top: 20px;
+            overflow: hidden;
+        }
+
+        .loading-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 2px;
+            animation: loading-progress 2s ease-in-out infinite;
+        }
+
+        @keyframes loading-progress {
+            0% { width: 0%; }
+            50% { width: 70%; }
+            100% { width: 100%; }
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.8; }
+            100% { transform: scale(1); opacity: 1; }
+        }
     </style>
 </head>
 <body>
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Analyzing File...</div>
+            <div class="loading-subtext">
+                Please wait while we process your data.<br>
+                This may take a few moments depending on file size.
+            </div>
+            <div class="loading-progress">
+                <div class="loading-progress-bar"></div>
+            </div>
+        </div>
+    </div>
+
     <div class="container">
         <div class="header">
-            <h1><i class="fas fa-chart-line"></i> womp womp 3600</h1>
+            <h1><i class="fas fa-chart-line"></i> tool</h1>
             <p>Professional Lead Generation & Data Enhancement Platform</p>
         </div>
 
@@ -481,9 +767,31 @@
             <button class="tab-btn active" onclick="showTab('phone-extraction')">
                 <i class="fas fa-phone"></i> Phone Extraction
             </button>
+            <button class="tab-btn" onclick="showTab('column-syncer')">
+                <i class="fas fa-mobile-alt"></i> Mobile Validator
+            </button>
             <button class="tab-btn" onclick="showTab('address-processing')">
                 <i class="fas fa-home"></i> Reverse Address Extractor
             </button>
+            <button class="tab-btn" onclick="showSystemInfo()">
+                <i class="fas fa-cog"></i> System Info
+            </button>
+        </div>
+
+        <!-- System Info Panel (Initially Hidden) -->
+        <div id="system-info-panel" class="main-card" style="display: none; margin-bottom: 20px;">
+            <h3><i class="fas fa-server"></i> System Information & Maintenance</h3>
+            <div id="systemStats" class="stats-grid">
+                <!-- System stats will be populated here -->
+            </div>
+            <div style="text-align: center; margin-top: 20px;">
+                <button class="btn btn-warning" onclick="performCleanup()">
+                    <i class="fas fa-broom"></i> Clean All Files Now
+                </button>
+                <button class="btn btn-outline" onclick="loadSystemInfo()" style="margin-left: 15px;">
+                    <i class="fas fa-sync"></i> Refresh Info
+                </button>
+            </div>
         </div>
 
         <!-- Phone Extraction Tab -->
@@ -502,6 +810,20 @@
                         <div class="upload-subtext">ZabaSearch phone extraction - separates records with/without phones</div>
                     </div>
                     <input type="file" id="phoneFileInput" accept=".csv,.xlsx,.xls" style="display: none;">
+                </div>
+
+                <!-- Recent Phone Files Section -->
+                <div class="recent-files-section">
+                    <h3>
+                        <i class="fas fa-history"></i>
+                        Recent Final Output Files (Clean_ & Merged_)
+                    </h3>
+                    <div id="phoneRecentFiles" class="recent-files-list">
+                        <div class="no-recent-files">
+                            <i class="fas fa-clock"></i>
+                            No recent final output files found
+                        </div>
+                    </div>
                 </div>
 
                 <div id="phoneFileInfo" class="file-info">
@@ -552,13 +874,94 @@
                     <h3><i class="fas fa-phone"></i> ZabaSearch Phone Extraction</h3>
                     <p>Extract missing phone numbers using ZabaSearch with intelligent formatting and processing.</p>
 
-                    <div class="input-group">
-                        <label for="phoneMaxRecords">Maximum Records to Process:</label>
-                        <input type="number" id="phoneMaxRecords" value="30" min="1" max="1000">
-                    </div>
-
                     <button class="btn btn-primary" onclick="startPhoneExtraction()">
                         <i class="fas fa-search"></i> Start Phone Extraction
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Column Syncer Tab -->
+        <div id="column-syncer" class="tab-content">
+            <div class="main-card">
+                <div class="upload-section">
+                    <h2>
+                        <i class="fas fa-mobile-alt"></i>
+                        Mobile Phone Validation & Column Syncing
+                    </h2>
+                    <div class="upload-area" onclick="document.getElementById('columnSyncFileInput').click()">
+                        <div class="upload-icon">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                        </div>
+                        <div class="upload-text">Click to upload or drag and drop</div>
+                        <div class="upload-subtext">AI-powered mobile phone detection and batch validation</div>
+                    </div>
+                    <input type="file" id="columnSyncFileInput" accept=".csv,.xlsx,.xls" style="display: none;">
+                </div>
+
+                <!-- File Info Section -->
+                <div id="columnSyncFileInfo" class="file-info">
+                    <!-- File information will be populated here -->
+                </div>
+
+                <!-- Recent Column Sync Files Section -->
+                <div class="recent-files-section">
+                    <h3>
+                        <i class="fas fa-history"></i>
+                        Recent Column Sync Files
+                    </h3>
+                    <div id="columnSyncRecentFiles" class="recent-files-list">
+                        <!-- Recent files will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Column Sync Results Section -->
+                <div id="columnSyncResults" class="results-section hidden">
+                    <h3><i class="fas fa-chart-line"></i> Column Sync Results</h3>
+                    <div id="columnSyncStats" class="summary-stats">
+                        <!-- Summary will be populated here -->
+                    </div>
+
+                    <div class="viewer-section">
+                        <div class="viewer-header">
+                            <h4><i class="fas fa-table"></i> Processed Data Preview</h4>
+                            <div class="pagination-controls">
+                                <button onclick="previousPage('columnSync')" id="columnSyncPrevBtn" class="btn btn-secondary" disabled>
+                                    <i class="fas fa-chevron-left"></i> Previous
+                                </button>
+                                <span id="columnSyncPageInfo" class="page-info">Page 1 of 1</span>
+                                <button onclick="nextPage('columnSync')" id="columnSyncNextBtn" class="btn btn-secondary" disabled>
+                                    Next <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="viewer-tools">
+                            <button onclick="exportCurrentView('columnSync')" class="btn btn-outline">
+                                <i class="fas fa-download"></i> Export Current View
+                            </button>
+                            <button onclick="refreshData('columnSync')" class="btn btn-outline">
+                                <i class="fas fa-sync"></i> Refresh
+                            </button>
+                        </div>
+                        <div class="data-viewer-container">
+                            <div id="columnSyncDataViewer" class="data-viewer">
+                                <!-- Data will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="columnSyncProcess" class="process-section hidden">
+                    <h3><i class="fas fa-mobile-alt"></i> Mobile Phone Validation</h3>
+                    <p>AI-powered mobile phone detection with intelligent duplication and validation.</p>
+
+                    <div class="process-controls">
+                        <label for="maxColumnSyncRecords">Max Records to Process:</label>
+                        <input type="number" id="maxColumnSyncRecords" value="50" min="1" max="1000" class="input-field">
+                    </div>
+
+                    <button class="btn btn-primary" onclick="startColumnSync()">
+                        <i class="fas fa-sync-alt"></i> Start Mobile Validation
                     </button>
                 </div>
             </div>
@@ -580,6 +983,20 @@
                         <div class="upload-subtext">Reverse address lookup - finds records without names and extracts owner data</div>
                     </div>
                     <input type="file" id="addressFileInput" accept=".csv,.xlsx,.xls" style="display: none;">
+                </div>
+
+                <!-- Recent Address Files Section -->
+                <div class="recent-files-section">
+                    <h3>
+                        <i class="fas fa-history"></i>
+                        Recent Address Extraction Files
+                    </h3>
+                    <div id="addressRecentFiles" class="recent-files-list">
+                        <div class="no-recent-files">
+                            <i class="fas fa-clock"></i>
+                            No recent address extraction files found
+                        </div>
+                    </div>
                 </div>
 
                 <div id="addressFileInfo" class="file-info">
@@ -630,11 +1047,6 @@
                     <h3><i class="fas fa-home"></i> BCPA Address & Owner Processing</h3>
                     <p>Parses addresses from any format and enhances with BCPA property owner data. Results separated with/without phone numbers.</p>
 
-                    <div class="input-group">
-                        <label for="addressMaxRecords">Maximum Records to Process:</label>
-                        <input type="number" id="addressMaxRecords" value="30" min="1" max="1000">
-                    </div>
-
                     <button class="btn btn-success" onclick="startAddressProcessing()">
                         <i class="fas fa-search"></i> Start Reverse Address Extraction
                     </button>
@@ -643,11 +1055,70 @@
         </div>
     </div>
 
-    <!-- Loading Overlay -->
-    <div id="loading" class="loading">
-        <div style="text-align: center;">
-            <i class="fas fa-spinner fa-spin" style="font-size: 3rem; margin-bottom: 20px;"></i>
-            <h3 id="loadingText">Processing...</h3>
+    <!-- Local Processing Indicator (Between Phone Processor and Terminal) -->
+    <div id="localProcessingIndicator" class="container" style="margin-top: 20px; display: none;">
+        <div class="main-card" style="text-align: center; padding: 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 15px;">
+                <i class="fas fa-cog fa-spin" style="font-size: 2rem;"></i>
+                <div>
+                    <h3 id="localProcessingText" style="margin: 0; margin-bottom: 5px;">Phone Extraction in Progress...</h3>
+                    <p id="localProcessingSubText" style="margin: 0; opacity: 0.9; font-size: 0.95rem;">ZabaSearch automation running - Check terminal for live updates</p>
+                </div>
+            </div>
+            <div style="margin-top: 20px;">
+                <div class="progress-bar-container" style="background: rgba(255,255,255,0.2); height: 6px; border-radius: 3px; overflow: hidden;">
+                    <div class="progress-bar" style="background: #fff; height: 100%; width: 0%; transition: width 0.3s ease; border-radius: 3px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Live Terminal Feed -->
+    <div class="container" style="margin-top: 20px;">
+        <div class="main-card">
+            <h2 style="margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                <i class="fas fa-terminal" style="color: #007bff;"></i>
+                Live Terminal Feed
+                <div style="margin-left: auto; display: flex; gap: 10px;">
+                    <button id="refreshTerminal" onclick="refreshTerminalFeed()" class="btn btn-outline-warning btn-sm">
+                        <i class="fas fa-sync"></i> Refresh Feed
+                    </button>
+                    <button id="clearTerminal" onclick="clearTerminalContent()" class="btn btn-outline-secondary btn-sm">
+                        <i class="fas fa-trash"></i> Clear
+                    </button>
+                </div>
+            </h2>
+
+            <div id="terminalContainer" style="
+                background: #1a1a1a;
+                color: #00ff00;
+                padding: 20px;
+                border-radius: 8px;
+                height: 400px;
+                overflow-y: auto;
+                font-family: 'Courier New', monospace;
+                font-size: 12px;
+                line-height: 1.4;
+                border: 2px solid #333;
+                position: relative;
+            ">
+                <div id="terminalContent">
+                    <div style="color: #87ceeb; margin-bottom: 10px;">
+                        📡 Terminal initialized - Waiting for activity...
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #666;">
+                <div>
+                    <span id="terminalStatus" style="color: #28a745;">● Connected</span> |
+                    Lines: <span id="lineCount">1</span> |
+                    Last update: <span id="lastUpdate">Never</span>
+                </div>
+                <div>
+                    Auto-scroll: <span id="autoScrollStatus" style="color: #28a745;">ON</span>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -656,37 +1127,24 @@
         <!-- Alerts will be added here -->
     </div>
 
+    <!-- Recent Files Modal -->
+    <div id="recentFilesModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 2000; justify-content: center; align-items: center;">
+        <div style="background: white; border-radius: 15px; padding: 30px; max-width: 800px; max-height: 80vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 id="modalTitle"><i class="fas fa-history"></i> Recent Files</h3>
+                <button onclick="closeRecentFilesModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
+            </div>
+            <div id="recentFilesContent">
+                <!-- Recent files content will be populated here -->
+            </div>
+        </div>
+    </div>
+
     <script>
         // Global variables
         let currentFileData = {};
 
-        // Tab Management
-        function showTab(tabId) {
-            // Hide all tab contents
-            document.querySelectorAll('.tab-content').forEach(tab => {
-                tab.classList.remove('active');
-            });
-
-            // Remove active class from all tab buttons
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.classList.remove('active');
-            });
-
-            // Show selected tab
-            document.getElementById(tabId).classList.add('active');
-
-            // Add active class to clicked button
-            event.target.classList.add('active');
-        }
-
-        // File Upload Handlers
-        document.getElementById('phoneFileInput').addEventListener('change', function(e) {
-            handleFileUpload(e.target.files[0], 'phone');
-        });
-
-        document.getElementById('addressFileInput').addEventListener('change', function(e) {
-            handleFileUpload(e.target.files[0], 'address');
-        });
+        // Tab Management - handled by enhanced function later in the file
 
         // Drag and Drop
         document.querySelectorAll('.upload-area').forEach(area => {
@@ -711,7 +1169,12 @@
 
             const files = e.dataTransfer.files;
             if (files.length > 0) {
-                const tabId = e.currentTarget.closest('.tab-content').id.includes('phone') ? 'phone' : 'address';
+                const tabContent = e.currentTarget.closest('.tab-content');
+                let tabId = 'phone'; // default
+                if (tabContent.id.includes('phone')) tabId = 'phone';
+                else if (tabContent.id.includes('address')) tabId = 'address';
+                else if (tabContent.id.includes('column-syncer')) tabId = 'columnSync';
+
                 handleFileUpload(files[0], tabId);
             }
         }
@@ -752,11 +1215,39 @@
             formData.append('file', file);
             formData.append('tabType', tabType);  // Send tab type to determine analysis type
 
-            showLoading('Analyzing your file...');
+            // Add cache-busting timestamp
+            const timestamp = new Date().getTime();
+            formData.append('timestamp', timestamp);
 
-            fetch('/upload', {
+            // Clear any cached data for this tab type
+            if (currentFileData[tabType]) {
+                console.log('🗑️ Clearing cached data for tab:', tabType);
+                delete currentFileData[tabType];
+            }
+
+            // Clear ALL session storage to prevent cache issues
+            try {
+                sessionStorage.clear();
+                localStorage.clear();
+                console.log('🧹 Cleared all storage');
+            } catch (e) {
+                console.log('Storage clearing not available');
+            }
+
+            // Clear the currentFileData object completely
+            currentFileData = {};
+
+            showLoading('Analyzing File...', 'Please wait while we analyze your data.<br>This may take a few moments depending on file size.');
+
+            fetch(`/upload?cache_bust=${timestamp}`, {
                 method: 'POST',
-                body: formData
+                body: formData,
+                // Add cache-busting headers
+                headers: {
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache',
+                    'Expires': '0'
+                }
             })
             .then(response => {
                 if (!response.ok) {
@@ -766,11 +1257,60 @@
             })
             .then(data => {
                 hideLoading();
+                console.log('📊 FRESH DATA received from server:', data);
+
                 if (data.error) {
                     showAlert(data.error, 'error');
+                } else if (data.download && tabType === 'columnSync') {
+                    // Handle immediate download for Column Syncer
+                    showAlert(data.message, 'success');
+
+                    // Trigger automatic download
+                    setTimeout(() => {
+                        const downloadLink = document.createElement('a');
+                        downloadLink.href = data.download_url;
+                        downloadLink.download = data.download_filename;
+                        downloadLink.style.display = 'none';
+                        document.body.appendChild(downloadLink);
+                        downloadLink.click();
+                        document.body.removeChild(downloadLink);
+
+                        console.log('📥 Auto-downloading:', data.download_filename);
+                    }, 500);
+
+                    // Show processing summary
+                    const fileInfo = document.getElementById('columnSyncFileInfo');
+                    if (fileInfo) {
+                        fileInfo.innerHTML = `
+                            <div class="processing-complete">
+                                <i class="fas fa-check-circle" style="color: #28a745;"></i>
+                                <strong>Processing Complete!</strong>
+                                <div class="stats-summary">${data.stats_summary}</div>
+                                <div class="download-info">
+                                    File downloaded as: <strong>${data.download_filename}</strong>
+                                </div>
+                            </div>
+                        `;
+                        fileInfo.style.display = 'block';
+                    }
                 } else {
+                    // Debug log the analysis data
+                    if (data.address_analysis) {
+                        console.log('🐛 Address analysis data:', data.address_analysis);
+                        console.log('🐛   Records without names:', data.address_analysis.records_without_names);
+                        console.log('🐛   Target records:', data.address_analysis.target_records_for_extraction);
+                        console.log('🐛   Records with names:', data.address_analysis.records_with_names);
+                    }
+
+                    // Force fresh assignment
+                    currentFileData = {};
                     currentFileData[tabType] = data;
-                    displayFileAnalysis(data, tabType);
+
+                    // Add a small delay then force fresh display
+                    setTimeout(() => {
+                        console.log('🔄 Force displaying fresh analysis data');
+                        displayFileAnalysis(data, tabType);
+                    }, 100);
                 }
             })
             .catch(error => {
@@ -781,6 +1321,10 @@
         }
 
         function displayFileAnalysis(data, tabType) {
+            // Add debug logging
+            console.log('🔄 displayFileAnalysis called with:', { data, tabType });
+            console.log('🔄 data.address_analysis:', data.address_analysis);
+
             // Display statistics based on tab type
             const statsElement = document.getElementById(tabType + 'Stats');
             if (statsElement) {
@@ -806,6 +1350,13 @@
                     `;
                 } else if (tabType === 'address') {
                     // Reverse address extractor tab - show name and address statistics
+                    console.log('🐛 Setting address stats with values:', {
+                        total: data.total_records,
+                        without_names: data.address_analysis.records_without_names,
+                        target: data.address_analysis.target_records_for_extraction,
+                        addresses: data.address_analysis.records_with_address
+                    });
+
                     statsElement.innerHTML = `
                         <div class="stat-card">
                             <div class="stat-number">${data.total_records}</div>
@@ -824,6 +1375,42 @@
                             <div class="stat-label">Valid Addresses</div>
                         </div>
                     `;
+                }
+            }
+
+            // Add a Force Refresh button for address tab - centered under stats, above data preview
+            if (tabType === 'address') {
+                // Remove any existing refresh button container first
+                const existingContainer = document.getElementById('refreshButtonContainer');
+                if (existingContainer) {
+                    existingContainer.remove();
+                }
+
+                // Create refresh button container
+                const refreshContainer = document.createElement('div');
+                refreshContainer.id = 'refreshButtonContainer';
+                refreshContainer.style.textAlign = 'center';
+                refreshContainer.style.margin = '20px 0';
+                refreshContainer.style.padding = '15px';
+                refreshContainer.style.backgroundColor = '#f8f9fa';
+                refreshContainer.style.borderRadius = '10px';
+
+                refreshContainer.innerHTML = `
+                    <button class="btn btn-warning" onclick="forceRefreshAnalysis()">
+                        <i class="fas fa-sync"></i> Force Refresh Analysis
+                    </button>
+                `;
+
+                // Insert it after stats but before data viewer
+                const statsElement = document.getElementById(tabType + 'Stats');
+                const dataViewer = document.getElementById(tabType + 'DataViewer');
+
+                if (statsElement && statsElement.parentNode) {
+                    if (dataViewer) {
+                        statsElement.parentNode.insertBefore(refreshContainer, dataViewer);
+                    } else {
+                        statsElement.parentNode.appendChild(refreshContainer);
+                    }
                 }
             }
 
@@ -885,13 +1472,83 @@
 
         // Processing Functions
         function startPhoneExtraction() {
-            const maxRecords = document.getElementById('phoneMaxRecords').value || 30;
-            processFile('phone', maxRecords);
+            processFile('phone', 0);  // 0 means unlimited records
         }
 
         function startAddressProcessing() {
-            const maxRecords = document.getElementById('addressMaxRecords').value || 30;
-            processFile('address', maxRecords);
+            processFile('address', 0);  // 0 means unlimited records
+        }
+
+        function startColumnSync() {
+            const maxRecords = document.getElementById('maxColumnSyncRecords').value || 50;
+            processColumnSync(maxRecords);
+        }
+
+        function processColumnSync(maxRecords) {
+            const fileData = currentFileData['columnSync'];
+            if (!fileData) {
+                showAlert('Please upload a file first', 'error');
+                return;
+            }
+
+            const processData = {
+                file_path: fileData.filepath,
+                max_records: parseInt(maxRecords)
+            };
+
+            showLoading(`Starting mobile phone validation (${maxRecords} records)...`);
+
+            fetch('/column_sync', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(processData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                if (data.success) {
+                    showAlert(`Mobile validation completed! Output: ${data.output_file}`, 'success');
+
+                    // Update UI with results
+                    displayColumnSyncResults(data);
+
+                    // Show results section
+                    document.getElementById('columnSyncResults').classList.remove('hidden');
+                    document.getElementById('columnSyncProcess').classList.add('hidden');
+                } else {
+                    showAlert(`Mobile validation failed: ${data.error}`, 'error');
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                console.error('Error:', error);
+                showAlert('An error occurred during mobile validation', 'error');
+            });
+        }
+
+        function displayColumnSyncResults(data) {
+            // Update summary stats
+            const summaryHtml = `
+                <div class="stat-card">
+                    <div class="stat-value">${data.stats.total_processed || 0}</div>
+                    <div class="stat-label">Total Processed</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${data.stats.mobile_phones_found || 0}</div>
+                    <div class="stat-label">Mobile Phones Found</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${data.stats.records_duplicated || 0}</div>
+                    <div class="stat-label">Records Duplicated</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${data.stats.success_rate || '0%'}</div>
+                    <div class="stat-label">Success Rate</div>
+                </div>
+            `;
+            document.getElementById('columnSyncSummary').innerHTML = summaryHtml;
         }
 
         function processFile(tabType, maxRecords) {
@@ -907,7 +1564,23 @@
                 max_records: maxRecords
             };
 
-            showLoading(`Starting ${tabType} processing for up to ${maxRecords} records...`);
+            // Use local processing indicator instead of overlay
+            if (tabType === 'phone') {
+                showLocalProcessing(
+                    'Phone Extraction in Progress...',
+                    'ZabaSearch automation running - Check terminal for live updates'
+                );
+            } else if (tabType === 'address') {
+                showLocalProcessing(
+                    'Address Processing in Progress...',
+                    'BCPA reverse lookup running - Check terminal for live updates'
+                );
+            } else {
+                showLocalProcessing(
+                    'Processing in Progress...',
+                    'Check terminal for live updates'
+                );
+            }
 
             fetch('/analyze', {
                 method: 'POST',
@@ -918,45 +1591,151 @@
             })
             .then(response => response.json())
             .then(data => {
-                hideLoading();
+                hideLocalProcessing();
+                console.log('Analyze response received:', data); // Debug logging
+
                 if (data.error) {
                     showAlert(data.error, 'error');
                 } else {
-                    // Show success message with merge option
-                    showProcessingSuccess(data, tabType);
+                    console.log('=== RESPONSE DATA DEBUG ===');
+                    console.log('Full response:', data);
+                    console.log('auto_download flag:', data.auto_download);
+                    console.log('download_url:', data.download_url);
+                    console.log('output_file:', data.output_file);
+                    console.log('=== END DEBUG ===');
 
-                    if (data.download_url) {
-                        // Auto download result file
-                        const link = document.createElement('a');
-                        link.href = data.download_url;
-                        link.download = data.output_file || 'results.csv';
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
+                    // Only attempt auto-download when specifically flagged by backend
+                    if (data.auto_download && data.download_url) {
+                        console.log('Auto-download triggered - auto_download flag:', data.auto_download);
+                        console.log('Download URL:', data.download_url);
+                        console.log('Output file:', data.output_file);
+
+                        // Method 1: Try direct window.open (more reliable)
+                        try {
+                            window.open(data.download_url, '_blank');
+                            console.log('Method 1: window.open triggered');
+                        } catch (e) {
+                            console.log('Method 1 failed:', e);
+                        }
+
+                        // Method 2: Create invisible link and click (backup)
+                        setTimeout(() => {
+                            try {
+                                const downloadLink = document.createElement('a');
+                                downloadLink.href = data.download_url;
+                                downloadLink.download = data.output_file || 'merged_results.csv';
+                                downloadLink.style.display = 'none';
+                                document.body.appendChild(downloadLink);
+                                downloadLink.click();
+                                document.body.removeChild(downloadLink);
+                                console.log('Method 2: programmatic click triggered');
+                            } catch (e) {
+                                console.log('Method 2 failed:', e);
+                            }
+                        }, 500);
+
+                        // Show success notification with save dialog option
+                        showAlert(`✅ Successfully done! File: ${data.output_file}`, 'success');
+
+                        // SYSTEM NOTIFICATION SOUND - Success
+                        playSystemNotification('success');
+
+                    } else {
+                        // Show completion notification even for non-auto-download cases
+                        if (data.download_url && data.output_file) {
+                            showAlert(`✅ Processing completed! File: ${data.output_file}`, 'success');
+                            playSystemNotification('success');
+                        } else {
+                            showAlert(`✅ Processing completed: ${data.message}`, 'success');
+                            playSystemNotification('success');
+                        }
+                        console.log('Processing completed:', data.message);
                     }
                 }
             })
             .catch(error => {
-                hideLoading();
+                hideLocalProcessing();
                 showAlert('Processing failed: ' + error.message, 'error');
+                addTerminalLine(`❌ Processing error: ${error.message}`, 'error');
             });
         }
 
-        // Utility Functions
-        function showLoading(text = 'Processing...') {
-            const loadingElement = document.getElementById('loading');
-            const loadingText = document.getElementById('loadingText');
-            if (loadingElement && loadingText) {
-                loadingText.textContent = text;
-                loadingElement.classList.add('show');
-            }
+        // Utility Functions - Updated to use local processing indicator
+        function showLoading(text = 'Processing...', subText = 'Please wait while we process your request') {
+            const overlay = document.getElementById('loadingOverlay');
+            const textElement = overlay.querySelector('.loading-text');
+            const subTextElement = overlay.querySelector('.loading-subtext');
+
+            if (textElement) textElement.textContent = text;
+            if (subTextElement) subTextElement.innerHTML = subText;
+
+            overlay.classList.add('show');
+            console.log('🔄 Loading overlay shown:', text);
         }
 
         function hideLoading() {
-            const loadingElement = document.getElementById('loading');
-            if (loadingElement) {
-                loadingElement.classList.remove('show');
+            const overlay = document.getElementById('loadingOverlay');
+            overlay.classList.remove('show');
+            console.log('✅ Loading overlay hidden');
+        }
+
+        // New Local Processing Indicator Functions
+        function showLocalProcessing(text = 'Processing...', subText = 'Please wait while we process your request') {
+            const indicator = document.getElementById('localProcessingIndicator');
+            const textElement = document.getElementById('localProcessingText');
+            const subTextElement = document.getElementById('localProcessingSubText');
+            const progressBar = indicator.querySelector('.progress-bar');
+
+            if (indicator && textElement && subTextElement) {
+                textElement.textContent = text;
+                subTextElement.textContent = subText;
+                indicator.style.display = 'block';
+                indicator.querySelector('.main-card').classList.add('local-processing');
+
+                // Start animated progress bar
+                if (progressBar) {
+                    progressBar.classList.add('progress-bar-animated');
+                }
+
+                // Add terminal message
+                addTerminalLine(`🚀 ${text}`, 'processing');
+
+                // Scroll to indicator
+                setTimeout(() => {
+                    indicator.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 100);
             }
+        }
+
+        function hideLocalProcessing() {
+            const indicator = document.getElementById('localProcessingIndicator');
+            const progressBar = indicator?.querySelector('.progress-bar');
+
+            if (indicator) {
+                indicator.style.display = 'none';
+                indicator.querySelector('.main-card').classList.remove('local-processing');
+
+                // Stop animated progress bar
+                if (progressBar) {
+                    progressBar.classList.remove('progress-bar-animated');
+                }
+
+                addTerminalLine('✅ Processing completed', 'success');
+            }
+        }
+
+        function updateLocalProcessing(text, subText, progress = null) {
+            const textElement = document.getElementById('localProcessingText');
+            const subTextElement = document.getElementById('localProcessingSubText');
+            const progressBar = document.querySelector('#localProcessingIndicator .progress-bar');
+
+            if (textElement) textElement.textContent = text;
+            if (subTextElement) subTextElement.textContent = subText;
+            if (progressBar && progress !== null) {
+                progressBar.style.width = `${progress}%`;
+            }
+
+            addTerminalLine(`🔄 ${text}`, 'info');
         }
 
         function showAlert(message, type = 'info') {
@@ -982,100 +1761,83 @@
             }
         }
 
-        // Store processed file data for merge functionality
-        let processedResults = {
-            phone: null,
-            address: null
-        };
+        function verifyFileData(filename) {
+            if (!filename) {
+                showAlert('No filename provided for verification', 'error');
+                return;
+            }
 
-        function showProcessingSuccess(data, tabType) {
-            // Store processed result info for merge functionality
-            processedResults[tabType] = {
-                processedFile: data.output_file,
-                downloadUrl: data.download_url,
-                originalFile: currentFileData[tabType] ? currentFileData[tabType].filepath : null
-            };
+            showLoading('Verifying phone data in file...');
 
-            // Create enhanced success message with merge option
+            fetch(`/verify_file_data/${filename}`)
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                if (data.error) {
+                    showAlert(`Verification failed: ${data.error}`, 'error');
+                } else {
+                    const phoneCount = Object.values(data.phone_data_counts || {}).reduce((a, b) => a + b, 0);
+                    const samplePhones = data.sample_phones || [];
+
+                    let message = `
+                        <div style="text-align: left; padding: 15px; background: #f8f9fa; border-radius: 8px; margin: 10px 0;">
+                            <h4 style="color: #2c3e50; margin-bottom: 15px;"><i class="fas fa-check-circle" style="color: #27ae60;"></i> File Verification Results</h4>
+                            <p><strong>📁 File:</strong> ${data.filename}</p>
+                            <p><strong>📊 Total Records:</strong> ${data.total_records}</p>
+                            <p><strong>📞 Phone Columns:</strong> ${data.phone_columns.join(', ')}</p>
+                            <p><strong>📱 Total Phone Numbers Found:</strong> ${phoneCount}</p>
+                    `;
+
+                    if (samplePhones.length > 0) {
+                        message += `
+                            <div style="margin-top: 15px; padding: 10px; background: #e8f5e8; border-radius: 5px;">
+                                <strong>✅ Sample Phone Numbers Found:</strong><br>
+                                ${samplePhones.map(phone => `<span style="font-family: monospace; background: white; padding: 2px 5px; margin: 2px; border-radius: 3px; display: inline-block;">${phone}</span>`).join(' ')}
+                            </div>
+                        `;
+                    } else {
+                        message += `
+                            <div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-radius: 5px; color: #856404;">
+                                <strong>⚠️ No phone numbers found in this file</strong>
+                            </div>
+                        `;
+                    }
+
+                    message += `
+                            <p style="margin-top: 15px; font-size: 0.9em; color: #6c757d;">
+                                <i class="fas fa-clock"></i> Verified at: ${new Date(data.verification_timestamp).toLocaleString()}
+                            </p>
+                        </div>
+                    `;
+
+                    showAlert(message, samplePhones.length > 0 ? 'success' : 'warning');
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                showAlert(`Verification error: ${error.message}`, 'error');
+            });
+        }
+
+        // Simple success display function for processing completion
+        function showProcessingComplete(data, tabType) {
             const alertsContainer = document.getElementById('alerts');
             if (alertsContainer) {
                 const alertDiv = document.createElement('div');
                 alertDiv.className = 'alert alert-success';
+
                 alertDiv.innerHTML = `
                     <div style="display: flex; align-items: center; justify-content: space-between;">
                         <div>
                             <i class="fas fa-check-circle"></i>
                             ${data.message}
                         </div>
-                        <div style="display: flex; gap: 10px;">
-                            <button onclick="mergeProcessedFile('${tabType}')"
-                                    style="background: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
-                                <i class="fas fa-merge"></i> Merge Back to Original
-                            </button>
-                            <button onclick="this.closest('.alert').remove()"
-                                    style="background: none; border: none; font-size: 1.2rem; cursor: pointer;">&times;</button>
-                        </div>
+                        <button onclick="this.closest('.alert').remove()"
+                                style="background: none; border: none; font-size: 1.2rem; cursor: pointer;">&times;</button>
                     </div>
                 `;
                 alertsContainer.appendChild(alertDiv);
             }
-        }
-
-        function mergeProcessedFile(tabType) {
-            const resultData = processedResults[tabType];
-            if (!resultData || !resultData.originalFile || !resultData.processedFile) {
-                showAlert('Missing file information for merge operation', 'error');
-                return;
-            }
-
-            showLoading('Merging processed results back into original file...');
-
-            const mergeData = {
-                original_filepath: resultData.originalFile,
-                processed_filepath: resultData.processedFile.includes('/') ?
-                    resultData.processedFile :
-                    `results/${resultData.processedFile}`
-            };
-
-            fetch('/merge_files', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(mergeData)
-            })
-            .then(response => response.json())
-            .then(data => {
-                hideLoading();
-                if (data.error) {
-                    showAlert(data.error, 'error');
-                } else {
-                    // Show detailed merge results
-                    const summary = data.summary || {};
-                    const message = `
-                        <strong>🎉 Smart Merge Completed!</strong><br>
-                        📊 <strong>${summary.records_updated || 0}</strong> records updated with new owner data<br>
-                        📝 <strong>${summary.records_unchanged || 0}</strong> records unchanged<br>
-                        ➕ <strong>${summary.new_records_added || 0}</strong> new records added<br>
-                        📁 Total: <strong>${summary.total_final_records || 0}</strong> records in merged file
-                    `;
-                    showAlert(message, 'success');
-
-                    if (data.download_url) {
-                        // Auto download merged file
-                        const link = document.createElement('a');
-                        link.href = data.download_url;
-                        link.download = data.output_file || 'updated_file.csv';
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                    }
-                }
-            })
-            .catch(error => {
-                hideLoading();
-                showAlert('Merge failed: ' + error.message, 'error');
-            });
         }
 
         // Data Viewer Functions
@@ -1104,7 +1866,7 @@
             const data = {
                 filepath: dataViewerStates[tabType].filepath,
                 page: page,
-                per_page: 50
+                per_page: 25  // Reduced from 50 to 25 rows per page
             };
 
             fetch('/fetch_data', {
@@ -1119,6 +1881,8 @@
                 if (!result.error) {
                     displayTableData(tabType, result);
                     updatePagination(tabType, result.pagination);
+                    // Initialize touch/swipe support after data is loaded
+                    initializeTouchSupport(tabType);
                 } else {
                     showAlert(result.error, 'error');
                 }
@@ -1158,6 +1922,12 @@
                     bodyElement.appendChild(tr);
                 });
             }
+
+            // Add scroll indicators
+            setTimeout(() => {
+                // Scroll indicators removed per user request
+                // addScrollIndicators(tabType);
+            }, 100);
         }
 
         function updatePagination(tabType, pagination) {
@@ -1228,6 +1998,747 @@
             link.click();
             document.body.removeChild(link);
         }
+
+        // Force refresh analysis function
+        function forceRefreshAnalysis() {
+            console.log('🔄 Force refreshing analysis...');
+
+            fetch('/force_fresh_analysis', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache',
+                    'Expires': '0'
+                },
+                body: JSON.stringify({
+                    filepath: 'HALLANDALE BEACH-All built 1920-2025.csv'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('🔄 Force refresh result:', data);
+                if (data.address_analysis) {
+                    // Clear all cached data
+                    currentFileData = {};
+
+                    // Force display the fresh data
+                    displayFileAnalysis(data, 'address');
+
+                    showAlert(`Fresh analysis: ${data.address_analysis.records_without_names} records without names`, 'success');
+                }
+            })
+            .catch(error => {
+                console.error('Force refresh error:', error);
+                showAlert('Force refresh failed: ' + error.message, 'error');
+            });
+        }
+
+        // Touch/Swipe Support for Table Navigation
+        function initializeTouchSupport(tabType) {
+            const tableContainer = document.querySelector(`#${tabType}DataTable`).closest('.table-container');
+            if (!tableContainer) return;
+
+            let startX = 0;
+            let startY = 0;
+            let startTime = 0;
+            let isScrolling = undefined;
+            let isSwiping = false;
+
+            // Touch start
+            tableContainer.addEventListener('touchstart', function(e) {
+                startX = e.touches[0].pageX;
+                startY = e.touches[0].pageY;
+                startTime = Date.now();
+                isScrolling = undefined;
+                isSwiping = false;
+            }, { passive: true });
+
+            // Touch move - allow natural scrolling, only detect fast swipes
+            tableContainer.addEventListener('touchmove', function(e) {
+                const currentX = e.touches[0].pageX;
+                const currentY = e.touches[0].pageY;
+                const diffX = Math.abs(startX - currentX);
+                const diffY = Math.abs(startY - currentY);
+
+                // Only determine direction on significant movement
+                if (isScrolling === undefined && (diffX > 10 || diffY > 10)) {
+                    isScrolling = diffY > diffX;
+                    isSwiping = diffX > diffY;
+                }
+
+                // Allow all natural scrolling - don't prevent default
+                // Only prevent default for very clear, fast horizontal swipes
+                const timeDiff = Date.now() - startTime;
+                if (isSwiping && diffX > 50 && timeDiff < 300) {
+                    // This is a fast swipe, prepare for page navigation
+                    e.preventDefault();
+                }
+            }, { passive: false });
+
+            // Touch end - only handle very clear swipe gestures
+            tableContainer.addEventListener('touchend', function(e) {
+                const diffX = startX - e.changedTouches[0].pageX;
+                const diffY = startY - e.changedTouches[0].pageY;
+                const timeDiff = Date.now() - startTime;
+
+                // Only trigger page navigation for fast, clear horizontal swipes
+                const swipeThreshold = 60; // Increased threshold
+                const maxVerticalDrift = 50; // Reduced vertical tolerance
+                const maxTime = 300; // Must be a quick swipe
+
+                if (isSwiping &&
+                    Math.abs(diffX) > swipeThreshold &&
+                    Math.abs(diffY) < maxVerticalDrift &&
+                    timeDiff < maxTime) {
+
+                    if (diffX > 0) {
+                        // Swipe left - next page
+                        nextPage(tabType);
+                    } else {
+                        // Swipe right - previous page
+                        previousPage(tabType);
+                    }
+                }
+
+                // Reset states
+                isScrolling = undefined;
+                isSwiping = false;
+            }, { passive: true });
+
+            // Add keyboard navigation
+            tableContainer.addEventListener('keydown', function(e) {
+                if (e.target.closest('.table-container')) {
+                    switch(e.key) {
+                        case 'ArrowLeft':
+                            e.preventDefault();
+                            previousPage(tabType);
+                            break;
+                        case 'ArrowRight':
+                            e.preventDefault();
+                            nextPage(tabType);
+                            break;
+                        case 'Home':
+                            e.preventDefault();
+                            loadDataPage(tabType, 1);
+                            break;
+                        case 'End':
+                            e.preventDefault();
+                            loadDataPage(tabType, dataViewerStates[tabType].totalPages);
+                            break;
+                    }
+                }
+            });
+
+            // Add mouse wheel navigation for pages (horizontal scroll)
+            tableContainer.addEventListener('wheel', function(e) {
+                // Check if scrolling horizontally with shift+wheel or horizontal wheel
+                if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+                    // Small horizontal wheel movements for page navigation
+                    if (Math.abs(e.deltaX) > 40 || (e.shiftKey && Math.abs(e.deltaY) > 40)) {
+                        e.preventDefault();
+                        const delta = e.deltaX || e.deltaY;
+                        if (delta > 0) {
+                            nextPage(tabType);
+                        } else {
+                            previousPage(tabType);
+                        }
+                    }
+                }
+            }, { passive: false });
+
+            // Add mouse drag support for desktop
+            let mouseDown = false;
+            let mouseStartX = 0;
+            let mouseStartY = 0;
+
+            tableContainer.addEventListener('mousedown', function(e) {
+                mouseDown = true;
+                mouseStartX = e.pageX;
+                mouseStartY = e.pageY;
+                tableContainer.style.cursor = 'grabbing';
+                e.preventDefault(); // Prevent text selection
+            });
+
+            document.addEventListener('mousemove', function(e) {
+                if (!mouseDown) return;
+
+                const diffX = mouseStartX - e.pageX;
+                const diffY = mouseStartY - e.pageY;
+
+                // Allow natural scrolling by updating scroll position
+                tableContainer.scrollLeft += diffX * 0.5;
+                tableContainer.scrollTop += diffY * 0.5;
+
+                mouseStartX = e.pageX;
+                mouseStartY = e.pageY;
+            });
+
+            document.addEventListener('mouseup', function(e) {
+                if (mouseDown) {
+                    mouseDown = false;
+                    tableContainer.style.cursor = 'grab';
+                }
+            });
+
+            // Make table container focusable for keyboard navigation
+            tableContainer.setAttribute('tabindex', '0');
+            tableContainer.style.cursor = 'grab';
+        }
+
+        // Add scroll indicators - REMOVED PER USER REQUEST
+        /*
+        function addScrollIndicators(tabType) {
+            const tableContainer = document.querySelector(`#${tabType}DataTable`).closest('.table-container');
+            if (!tableContainer) return;
+
+            // Create scroll indicators
+            const scrollIndicator = document.createElement('div');
+            scrollIndicator.className = 'scroll-indicator';
+            scrollIndicator.innerHTML = `
+                <div class="scroll-hint">
+                    <i class="fas fa-hand-point-up"></i>
+                    <span>Touch & drag to scroll • Swipe left/right for pages • Shift+wheel for navigation</span>
+                </div>
+            `;
+
+            // Add CSS for scroll indicator
+            const style = document.createElement('style');
+            style.textContent = `
+                .scroll-indicator {
+                    position: absolute;
+                    bottom: 10px;
+                    right: 10px;
+                    background: rgba(102, 126, 234, 0.9);
+                    color: white;
+                    padding: 8px 12px;
+                    border-radius: 20px;
+                    font-size: 0.8rem;
+                    pointer-events: none;
+                    opacity: 0;
+                    transition: opacity 0.3s ease;
+                    z-index: 100;
+                }
+                .table-container:hover .scroll-indicator {
+                    opacity: 1;
+                }
+                .scroll-hint {
+                    display: flex;
+                    align-items: center;
+                    gap: 5px;
+                }
+            `;
+            document.head.appendChild(style);
+
+            // Add indicator to container
+            tableContainer.style.position = 'relative';
+            tableContainer.appendChild(scrollIndicator);
+        }
+        */
+
+        // System Info & Cleanup Functions
+        function showSystemInfo() {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // Remove active class from all tab buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // Add active class to system info button
+            event.target.classList.add('active');
+
+            // Show system info panel
+            const systemPanel = document.getElementById('system-info-panel');
+            if (systemPanel) {
+                systemPanel.style.display = 'block';
+                loadSystemInfo();
+            }
+        }
+
+        function loadSystemInfo() {
+            showLoading('Loading system information...');
+
+            fetch('/system_info')
+                .then(response => response.json())
+                .then(data => {
+                    hideLoading();
+                    displaySystemInfo(data);
+                })
+                .catch(error => {
+                    hideLoading();
+                    showAlert('Failed to load system info: ' + error.message, 'error');
+                });
+        }
+
+        function displaySystemInfo(data) {
+            const statsElement = document.getElementById('systemStats');
+            if (statsElement && data.disk_usage) {
+                statsElement.innerHTML = `
+                    <div class="stat-card">
+                        <div class="stat-number">${data.disk_usage.free_gb.toFixed(1)} GB</div>
+                        <div class="stat-label">Free Space</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${data.disk_usage.used_percent.toFixed(1)}%</div>
+                        <div class="stat-label">Disk Usage</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${Object.values(data.folder_sizes_mb || {}).reduce((a, b) => a + b, 0).toFixed(1)} MB</div>
+                        <div class="stat-label">Working Files</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${data.uptime_info.cleanup_recommended ? '⚠️' : '✅'}</div>
+                        <div class="stat-label">Storage Status</div>
+                    </div>
+                `;
+            }
+        }
+
+        function performCleanup() {
+            console.log('🔥 performCleanup() called');
+            if (!confirm('This will delete ALL files from uploads, results, logs, and temp folders (regardless of age). Continue?')) {
+                console.log('❌ User cancelled cleanup');
+                return;
+            }
+
+            console.log('✅ User confirmed cleanup, starting...');
+            showLoading('Cleaning up all files...');
+
+            console.log('📡 Making fetch request to /cleanup_files');
+            fetch('/cleanup_files', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ max_age_days: 0, force: true })
+            })
+                .then(response => {
+                    console.log('📥 Got response:', response.status, response.statusText);
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('📄 Response data:', data);
+                    hideLoading();
+                    if (data.error) {
+                        console.log('❌ Error in response:', data.error);
+                        showAlert(data.error, 'error');
+                    } else {
+                        console.log('✅ Cleanup successful:', data.message);
+                        showAlert(data.message, 'success');
+                        // Refresh all relevant sections
+                        console.log('🔄 Refreshing UI components...');
+                        loadSystemInfo();
+                        loadInlineRecentFiles('phone');
+                        loadInlineRecentFiles('address');
+                        // Force refresh of system stats after short delay
+                        setTimeout(() => {
+                            console.log('🔄 Delayed refresh...');
+                            loadSystemInfo();
+                        }, 1000);
+                    }
+                })
+                .catch(error => {
+                    console.log('💥 Fetch error:', error);
+                    hideLoading();
+                    console.error('Cleanup error:', error);
+                    showAlert('Cleanup failed: ' + error.message, 'error');
+                });
+        }
+
+        // Recent Files Functions
+        function viewRecentFiles(tabType) {
+            showLoading('Loading recent files...');
+
+            fetch('/recent_files')
+                .then(response => response.json())
+                .then(data => {
+                    hideLoading();
+                    displayRecentFiles(data, tabType);
+                })
+                .catch(error => {
+                    hideLoading();
+                    showAlert('Failed to load recent files: ' + error.message, 'error');
+                });
+        }
+
+        function displayRecentFiles(data, tabType) {
+            const modalTitle = document.getElementById('modalTitle');
+            const modalContent = document.getElementById('recentFilesContent');
+            const modal = document.getElementById('recentFilesModal');
+
+            modalTitle.innerHTML = `<i class="fas fa-history"></i> Recent ${tabType === 'phone' ? 'Final Output Files (Clean_ & Merged_)' : 'Address Processing'} Files`;
+
+            const files = tabType === 'phone' ? data.phone_files : data.address_files;
+
+            if (files.length === 0) {
+                modalContent.innerHTML = `
+                    <p style="text-align: center; color: #666; padding: 40px;">
+                        <i class="fas fa-inbox" style="font-size: 3rem; margin-bottom: 20px; display: block;"></i>
+                        No recent ${tabType} processing files found.
+                    </p>
+                `;
+            } else {
+                modalContent.innerHTML = `
+                    <div class="download-grid">
+                        ${files.map(file => `
+                            <div class="download-card">
+                                <h3>${file.name}</h3>
+                                <p><strong>Size:</strong> ${(file.size / 1024).toFixed(1)} KB</p>
+                                <p><strong>Modified:</strong> ${new Date(file.modified).toLocaleString()}</p>
+                                <p><strong>Age:</strong> ${file.age_hours < 24 ? file.age_hours.toFixed(1) + ' hours' : (file.age_hours / 24).toFixed(1) + ' days'}</p>
+                                <a href="/download/${file.name}" class="btn btn-primary" download>
+                                    <i class="fas fa-download"></i> Download
+                                </a>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+
+            modal.style.display = 'flex';
+        }
+
+        function closeRecentFilesModal() {
+            const modal = document.getElementById('recentFilesModal');
+            modal.style.display = 'none';
+        }
+
+        // Close modal when clicking outside
+        document.getElementById('recentFilesModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeRecentFilesModal();
+            }
+        });
+
+        // Inline Recent Files Functions
+        function loadInlineRecentFiles(tabType) {
+            const containerId = tabType === 'phone' ? 'phoneRecentFiles' : 'addressRecentFiles';
+            const container = document.getElementById(containerId);
+
+            if (!container) return;
+
+            fetch('/recent_files')
+                .then(response => response.json())
+                .then(data => {
+                    displayInlineRecentFiles(data, tabType, container);
+                })
+                .catch(error => {
+                    container.innerHTML = `
+                        <div class="no-recent-files">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            Failed to load recent files
+                        </div>
+                    `;
+                });
+        }
+
+        function displayInlineRecentFiles(data, tabType, container) {
+            const files = tabType === 'phone' ? data.phone_files : data.address_files;
+
+            if (files.length === 0) {
+                container.innerHTML = `
+                    <div class="no-recent-files">
+                        <i class="fas fa-clock"></i>
+                        No recent ${tabType === 'phone' ? 'final output files (Clean_ & Merged_)' : 'address extraction'} files found
+                    </div>
+                `;
+                return;
+            }
+
+            // Show only the 3 most recent files
+            const recentFiles = files.slice(0, 3);
+
+            container.innerHTML = recentFiles.map(file => `
+                <div class="recent-file-item" onclick="downloadFile('${file.name}')">
+                    <div class="recent-file-name">
+                        <span><i class="fas fa-file-csv"></i> ${file.name}</span>
+                        <span class="file-size">${(file.size / 1024).toFixed(1)} KB</span>
+                    </div>
+                    <div class="recent-file-info">
+                        <span>${new Date(file.modified).toLocaleDateString()}</span>
+                        <span>${file.age_hours < 24 ? file.age_hours.toFixed(1) + 'h ago' : (file.age_hours / 24).toFixed(1) + 'd ago'}</span>
+                    </div>
+                    <div class="recent-file-actions">
+                        <button class="btn btn-primary" onclick="event.stopPropagation(); downloadFile('${file.name}')">
+                            <i class="fas fa-download"></i> Download
+                        </button>
+                        <button class="btn btn-outline" onclick="event.stopPropagation(); viewRecentFiles('${tabType}')">
+                            <i class="fas fa-list"></i> View All
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function downloadFile(filename) {
+            window.open(`/download/${filename}`, '_blank');
+        }
+
+        // Enhanced tab management to handle system info
+        function showTab(tabId) {
+            // Hide system info panel
+            const systemPanel = document.getElementById('system-info-panel');
+            if (systemPanel) {
+                systemPanel.style.display = 'none';
+            }
+
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // Remove active class from all tab buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // Show selected tab
+            document.getElementById(tabId).classList.add('active');
+
+            // Add active class to clicked button
+            event.target.classList.add('active');
+
+            // Load recent files for the active tab
+            if (tabId === 'phone-extraction') {
+                loadInlineRecentFiles('phone');
+            } else if (tabId === 'address-processing') {
+                loadInlineRecentFiles('address');
+            } else if (tabId === 'column-syncer') {
+                loadInlineRecentFiles('columnSync');
+            }
+        }
+
+        // Load recent files when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // File Upload Handlers
+            document.getElementById('phoneFileInput').addEventListener('change', function(e) {
+                handleFileUpload(e.target.files[0], 'phone');
+            });
+
+            document.getElementById('addressFileInput').addEventListener('change', function(e) {
+                handleFileUpload(e.target.files[0], 'address');
+            });
+
+            document.getElementById('columnSyncFileInput').addEventListener('change', function(e) {
+                handleFileUpload(e.target.files[0], 'columnSync');
+            });
+
+            // Load recent files for the initially active tab (phone extraction)
+            loadInlineRecentFiles('phone');
+        });
+
+        // SYSTEM NOTIFICATION SOUNDS
+        function playSystemNotification(type) {
+            try {
+                // Create audio context for system sounds
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+                // Different frequencies for different notification types
+                const frequencies = {
+                    'success': [800, 1000, 1200], // Success chime - ascending
+                    'merge': [1200, 1000, 800],   // Merge complete - descending
+                    'error': [400, 400, 400],     // Error - low tone
+                    'progress': [600]             // Progress - single tone
+                };
+
+                const freq = frequencies[type] || frequencies['success'];
+                let delay = 0;
+
+                freq.forEach((frequency, index) => {
+                    setTimeout(() => {
+                        const oscillator = audioContext.createOscillator();
+                        const gainNode = audioContext.createGain();
+
+                        oscillator.connect(gainNode);
+                        gainNode.connect(audioContext.destination);
+
+                        oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+                        oscillator.type = 'sine';
+
+                        gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+                        gainNode.gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 0.05);
+                        gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.3);
+
+                        oscillator.start(audioContext.currentTime);
+                        oscillator.stop(audioContext.currentTime + 0.3);
+                    }, delay);
+                    delay += 150; // 150ms between notes
+                });
+
+                console.log(`🔊 System notification: ${type}`);
+            } catch (error) {
+                console.log('Audio notification failed:', error);
+            }
+        }
+
+        // Terminal Feed Functions
+        let terminalAutoScroll = false; // Disabled auto-scroll
+        let terminalLines = 1;
+
+        function clearTerminalContent() {
+            document.getElementById('terminalContent').innerHTML = `
+                <div style="color: #87ceeb; margin-bottom: 10px;">
+                    📡 Terminal cleared - Waiting for activity...
+                </div>
+            `;
+            terminalLines = 1;
+            updateTerminalStats();
+        }
+
+        function addTerminalLine(message, type = 'info') {
+            const terminalContent = document.getElementById('terminalContent');
+            const timestamp = new Date().toLocaleTimeString();
+
+            let color = '#00ff00';
+            let icon = '📊';
+
+            switch(type) {
+                case 'error': color = '#ff6b6b'; icon = '❌'; break;
+                case 'warning': color = '#ffa500'; icon = '⚠️'; break;
+                case 'success': color = '#90ee90'; icon = '✅'; break;
+                case 'info': color = '#87ceeb'; icon = '🔍'; break;
+                case 'processing': color = '#ffff00'; icon = '🚀'; break;
+                case 'zaba': color = '#9370db'; icon = '🔍'; break;  // ZabaSearch logs
+                case 'bcpa': color = '#ff69b4'; icon = '🏡'; break;  // BCPA logs
+                case 'phone': color = '#32cd32'; icon = '📞'; break; // Phone processing logs
+                case 'address': color = '#40e0d0'; icon = '📍'; break; // Address logs
+                case 'system': color = '#dda0dd'; icon = '⚙️'; break; // System logs
+                case 'debug': color = '#778899'; icon = '🐛'; break; // Debug logs
+            }
+
+            const lineDiv = document.createElement('div');
+            lineDiv.style.marginBottom = '5px';
+            lineDiv.innerHTML = `
+                <span style="color: #666; font-size: 10px;">[${timestamp}]</span>
+                <span style="color: ${color};">${icon} ${message}</span>
+            `;
+
+            terminalContent.appendChild(lineDiv);
+            terminalLines++;
+
+            // Keep only last 200 lines
+            const lines = terminalContent.children;
+            if (lines.length > 200) {
+                terminalContent.removeChild(lines[0]);
+            }
+
+            // Auto-scroll to bottom (disabled)
+            // if (terminalAutoScroll) {
+            //     const container = document.getElementById('terminalContainer');
+            //     container.scrollTop = container.scrollHeight;
+            // }
+
+            updateTerminalStats();
+        }
+
+        function updateTerminalStats() {
+            document.getElementById('lineCount').textContent = terminalLines;
+            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+        }
+
+        // Terminal refresh functionality
+        function refreshTerminalFeed() {
+            const refreshBtn = document.getElementById('refreshTerminal');
+            refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
+            refreshBtn.disabled = true;
+
+            addTerminalLine('🔄 Manually refreshing terminal feed...', 'info');
+
+            // Force reconnect to terminal feed
+            if (window.currentEventSource) {
+                try {
+                    window.currentEventSource.close();
+                } catch (e) {
+                    console.log('Error closing EventSource:', e);
+                }
+            }
+
+            setTimeout(() => {
+                startTerminalFeed();
+                refreshBtn.innerHTML = '<i class="fas fa-sync"></i> Refresh Feed';
+                refreshBtn.disabled = false;
+                addTerminalLine('✅ Terminal feed refreshed successfully', 'success');
+            }, 1500);
+        }
+
+        // Monitor Flask app activity
+        function startTerminalFeed() {
+            addTerminalLine('Terminal feed started - Connecting to live server logs...', 'success');
+
+            // Connect to Server-Sent Events for real-time logs
+            const eventSource = new EventSource('/terminal_feed');
+            window.currentEventSource = eventSource; // Store reference for refresh functionality
+
+            eventSource.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    addTerminalLine(data.message, data.type);
+                } catch (e) {
+                    addTerminalLine('Error parsing terminal data: ' + e.message, 'error');
+                }
+            };
+
+            eventSource.onerror = function(event) {
+                addTerminalLine('Connection to terminal feed lost - Attempting to reconnect...', 'warning');
+                setTimeout(() => {
+                    if (eventSource.readyState === EventSource.CLOSED) {
+                        addTerminalLine('Reconnecting to terminal feed...', 'info');
+                        startTerminalFeed();
+                    }
+                }, 5000);
+            };
+
+            // Monitor frontend activity
+            const originalProcessFile = window.processFile;
+            if (originalProcessFile) {
+                window.processFile = function(tabType, maxRecords) {
+                    addTerminalLine(`🚀 Frontend: Starting ${tabType} processing with ${maxRecords || 'unlimited'} records...`, 'processing');
+                    return originalProcessFile.call(this, tabType, maxRecords);
+                };
+            }
+
+            // Monitor fetch requests
+            const originalFetch = window.fetch;
+            window.fetch = function(...args) {
+                const url = args[0];
+                if (typeof url === 'string') {
+                    if (url.includes('/analyze')) {
+                        addTerminalLine(`� Frontend: Sending request to analysis pipeline...`, 'info');
+                    } else if (url.includes('/upload')) {
+                        addTerminalLine(`� Frontend: Uploading file for processing...`, 'info');
+                    } else if (url.includes('/separate')) {
+                        addTerminalLine(`🔄 Frontend: Separating records by criteria...`, 'info');
+                    }
+                }
+
+                return originalFetch.apply(this, args)
+                    .then(response => {
+                        if (typeof url === 'string') {
+                            if (url.includes('/analyze')) {
+                                if (response.ok) {
+                                    addTerminalLine(`✅ Frontend: Analysis request completed successfully`, 'success');
+                                } else {
+                                    addTerminalLine(`❌ Frontend: Analysis request failed with status: ${response.status}`, 'error');
+                                }
+                            }
+                        }
+                        return response;
+                    })
+                    .catch(error => {
+                        if (typeof url === 'string' && url.includes('/analyze')) {
+                            addTerminalLine(`❌ Frontend: Analysis request error: ${error.message}`, 'error');
+                        }
+                        throw error;
+                    });
+            };
+        }
+
+        // Start terminal feed when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            startTerminalFeed();
+        });
     </script>
 </body>
 </html>

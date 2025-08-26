@@ -19,20 +19,63 @@ import logging
 import pandas as pd
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
+
+# Import proxy manager (AI will use direct connection, ZabaSearch will use proxies)
+try:
+    from proxy_manager import proxy_manager
+    print("🔒 Proxy manager loaded - Smart proxy routing enabled")
+    print("📡 AI APIs: Direct connection | 🕸️ ZabaSearch: Proxy connection")
+except ImportError:
+    print("⚠️ Proxy manager not available - all connections direct")
+    proxy_manager = None
+
+def read_data_file(filepath, encoding='utf-8', sheet_name=0):
+    """
+    Universal file reader for CSV, Excel (.xlsx), and Excel (.xls) files
+
+    Args:
+        filepath: Path to the file
+        encoding: Encoding for CSV files (default: utf-8)
+        sheet_name: Sheet name or index for Excel files (default: 0 - first sheet)
+
+    Returns:
+        pd.DataFrame: Loaded data
+    """
+    try:
+        if filepath.endswith('.csv'):
+            return pd.read_csv(filepath, encoding=encoding)
+        elif filepath.endswith(('.xlsx', '.xls')):
+            return pd.read_excel(filepath, sheet_name=sheet_name)
+        else:
+            # Fallback to CSV
+            logging.warning(f"Unknown file extension for {filepath}, trying CSV format")
+            return pd.read_csv(filepath, encoding=encoding)
+    except Exception as e:
+        logging.error(f"Error reading file {filepath}: {e}")
+        raise
 
 # Import our processing modules
 try:
-    from csv_format_handler import CSVFormatHandler
-    CSV_HANDLER_AVAILABLE = True
-    print("✅ CSV Format Handler: Available")
+    from intelligent_phone_formatter_v2 import IntelligentPhoneFormatter
+    AI_FORMATTER_AVAILABLE = True
+    print("✅ AI Phone Formatter: Available")
 except ImportError as e:
-    print(f"❌ CSV Format Handler: Not available - {e}")
-    CSV_HANDLER_AVAILABLE = False
+    print(f"❌ AI Phone Formatter: Not available - {e}")
+    AI_FORMATTER_AVAILABLE = False
 
-# Setup logging
+# Setup logging to logs folder
+log_folder = Path('logs')
+log_folder.mkdir(exist_ok=True)
+log_file = log_folder / f'phone_search_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'
+
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(log_file, encoding='utf-8'),
+        logging.StreamHandler()
+    ]
 )
 
 class PhoneSearchPipeline:
@@ -40,7 +83,7 @@ class PhoneSearchPipeline:
 
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-        self.format_handler = CSVFormatHandler() if CSV_HANDLER_AVAILABLE else None
+        self.ai_formatter = IntelligentPhoneFormatter() if AI_FORMATTER_AVAILABLE else None
 
         # Ensure directories exist
         os.makedirs('results', exist_ok=True)
@@ -49,9 +92,10 @@ class PhoneSearchPipeline:
 
         self.logger.info("Phone Search Pipeline initialized")
 
-    def process_csv_direct(self, csv_path: str, output_path: str, max_records: int = 10) -> bool:
+    def process_csv_direct(self, csv_path: str, output_path: str, max_records: Optional[int] = None) -> bool:
         """
         Process CSV file directly with ZabaSearch automation
+        For large files (>100 records needing processing), splits into batches for parallel processing
 
         Args:
             csv_path: Path to input CSV file
@@ -65,53 +109,58 @@ class PhoneSearchPipeline:
             self.logger.info(f"🚀 Starting direct processing: {csv_path}")
             self.logger.info(f"📊 Max records to process: {max_records}")
 
-            # Read and standardize the CSV
-            if self.format_handler:
-                self.logger.info("📄 Using format handler to standardize CSV...")
-                standardized_path = self.format_handler.standardize_to_search_format(csv_path)
-                if standardized_path:
-                    df = pd.read_csv(standardized_path)
+            # Read and format with AI-powered formatter
+            if self.ai_formatter:
+                self.logger.info("🤖 Running AI-powered phone data formatting...")
+
+                # Use AI formatter to process the file and prepare ZabaSearch-ready data
+                format_result = self.ai_formatter.format_csv_for_phone_extraction(csv_path)
+
+                if format_result.get('success'):
+                    self.logger.info("✅ AI formatting completed successfully")
+                    self.logger.info(f"📊 Records processed: {format_result.get('records_processed', 0)}")
+                    self.logger.info(f"📊 Records skipped: {format_result.get('records_skipped', 0)}")
+
+                    # Read the formatted data
+                    formatted_path = format_result.get('output_path')
+                    if formatted_path and os.path.exists(formatted_path):
+                        # Check if we need batch processing
+                        df = pd.read_csv(formatted_path)
+                        records_needing_processing = len(df[df.get('Skip_ZabaSearch', False) != True])
+
+                        if records_needing_processing > 100:
+                            self.logger.info(f"🔄 Large dataset detected: {records_needing_processing} records need processing")
+                            self.logger.info("🚀 Initiating multi-terminal batch processing...")
+                            return self._process_in_batches(formatted_path, output_path, records_needing_processing)
+                        else:
+                            self.logger.info(f"📊 Standard processing: {records_needing_processing} records")
+                            # Continue with normal processing
+                        df = read_data_file(formatted_path)
+                        self.logger.info(f"✅ Loaded {len(df)} AI-formatted records for ZabaSearch processing")
+                        process_df = df  # Use all AI-formatted records
+                    else:
+                        self.logger.warning("⚠️ AI formatter succeeded but no output file found")
+                        df = read_data_file(csv_path)
+                        process_df = df.copy()  # Use all records
                 else:
-                    df = pd.read_csv(csv_path)
+                    self.logger.warning(f"⚠️ AI formatting failed: {format_result.get('error', 'Unknown error')}")
+                    self.logger.info("📄 Falling back to direct file processing...")
+                    df = read_data_file(csv_path)
+                    process_df = df.copy()  # Use all records
             else:
-                self.logger.info("📄 Reading CSV directly...")
-                df = pd.read_csv(csv_path)
+                self.logger.info("📄 AI formatter not available, reading file directly...")
+                df = read_data_file(csv_path)
+                process_df = df.copy()  # Use all records
 
             if df is None or len(df) == 0:
-                self.logger.error("❌ No data found in CSV file")
+                self.logger.error("❌ No data found in file")
                 return False
 
-            self.logger.info(f"📊 Loaded {len(df)} total records")
+            self.logger.info(f"📊 Total records available for processing: {len(process_df)}")
 
-            # Filter to records without phone numbers
-            phone_columns = [col for col in df.columns if 'phone' in col.lower() or 'telephone' in col.lower()]
-
-            if phone_columns:
-                phone_col = phone_columns[0]
-                self.logger.info(f"📞 Using phone column: {phone_col}")
-
-                # Get records without phone numbers
-                no_phone_mask = df[phone_col].fillna('').astype(str).str.strip() == ''
-                no_phone_df = df[no_phone_mask].copy()
-
-                self.logger.info(f"🔍 Found {len(no_phone_df)} records without phone numbers")
-
-                if len(no_phone_df) == 0:
-                    self.logger.warning("⚠️ No records found without phone numbers")
-                    # Save original file as result
-                    df.to_csv(output_path, index=False)
-                    return True
-
-                # Limit to max_records
-                process_df = no_phone_df.head(max_records).copy()
-                self.logger.info(f"🎯 Processing {len(process_df)} records")
-
-            else:
-                self.logger.info("📞 No phone column found, processing all records")
-                process_df = df.head(max_records).copy()
-
-            # Run ZabaSearch processing
-            success = self._run_zabasearch_processing(process_df, output_path)
+            # Run ZabaSearch processing with the prepared data
+            # Pass the original csv_path so merger can access the full original file
+            success = self._run_zabasearch_processing(process_df, output_path, csv_path)
 
             if success:
                 self.logger.info(f"✅ Processing completed successfully: {output_path}")
@@ -119,14 +168,247 @@ class PhoneSearchPipeline:
             else:
                 self.logger.error("❌ ZabaSearch processing failed")
                 # Save processed data anyway
-                process_df.to_csv(output_path, index=False)
+                columns_to_drop = ['DirectName_Phone_Primary', 'DirectName_Phone_Secondary', 'DirectName_Phone_All']
+                final_process_df = process_df.drop(columns=[col for col in columns_to_drop if col in process_df.columns])
+                final_process_df.to_csv(output_path, index=False)
                 return True
 
         except Exception as e:
             self.logger.error(f"❌ Pipeline processing failed: {e}")
             return False
 
-    def _run_zabasearch_processing(self, df: pd.DataFrame, output_path: str) -> bool:
+    def _process_in_batches(self, formatted_path: str, output_path: str, total_records: int) -> bool:
+        """
+        Process large files in batches using multiple terminals
+
+        Args:
+            formatted_path: Path to the formatted CSV file
+            output_path: Final output path
+            total_records: Total number of records needing processing
+
+        Returns:
+            bool: True if batch processing completed successfully
+        """
+        try:
+            import subprocess
+            import threading
+            import time
+
+            self.logger.info("🔄 Setting up batch processing...")
+
+            # Read the full dataset
+            df = pd.read_csv(formatted_path)
+
+            # FIXED: Don't filter here - let ZabaSearch handle Skip_ZabaSearch logic
+            # This preserves Original_Index alignment for proper merging
+            self.logger.info(f"📊 Total records for batch processing: {len(df)}")
+            records_needing_processing = len(df[df.get('Skip_ZabaSearch', False) != True])
+            self.logger.info(f"📞 Records that need phone extraction: {records_needing_processing}")
+            self.logger.info(f"⏭️  Records to skip (already have phones): {len(df) - records_needing_processing}")
+
+            # Split ALL records (including skipped ones) into 4 batches to preserve indexing
+            batch_size = len(df) // 4
+            batches = []
+
+            for i in range(4):
+                start_idx = i * batch_size
+                if i == 3:  # Last batch gets remainder
+                    end_idx = len(df)
+                else:
+                    end_idx = (i + 1) * batch_size
+
+                batch_df = df.iloc[start_idx:end_idx]
+                if len(batch_df) > 0:
+                    batches.append(batch_df)
+
+            self.logger.info(f"📊 Created {len(batches)} batches for parallel processing")
+
+            # Create batch files and run headless processing
+            batch_files = []
+            batch_outputs = []
+
+            for i, batch_df in enumerate(batches):
+                batch_filename = f"batch_{i+1}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+                batch_path = os.path.join('temp', batch_filename)
+
+                # Save batch file
+                batch_df.to_csv(batch_path, index=False)
+                batch_files.append(batch_path)
+
+                # Create output path for this batch
+                batch_output = os.path.join('results', f"phone_results_batch_{i+1}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+                batch_outputs.append(batch_output)
+
+            # Run batches using headless processing (import zabasearch module directly)
+            self.logger.info("🚀 Starting headless batch processing...")
+            success = self._run_headless_batches(batch_files, batch_outputs)
+
+            # ENHANCED: Combine successful batch results even if some batches failed
+            self.logger.info("🔄 Combining available batch results...")
+            combined_df = pd.DataFrame()
+            successful_batches = 0
+
+            for i, batch_output in enumerate(batch_outputs):
+                if os.path.exists(batch_output):
+                    try:
+                        batch_result = pd.read_csv(batch_output)
+                        if len(batch_result) > 0:  # Only combine if batch has data
+                            combined_df = pd.concat([combined_df, batch_result], ignore_index=True)
+                            successful_batches += 1
+                            self.logger.info(f"   ✅ Combined Batch {i+1}: {len(batch_result)} records")
+                        else:
+                            self.logger.warning(f"   ⚠️ Batch {i+1} is empty - skipping")
+                    except Exception as e:
+                        self.logger.error(f"   ❌ Failed to read Batch {i+1}: {e}")
+                else:
+                    self.logger.warning(f"   ⚠️ Batch {i+1} output file not found - skipping")
+
+            # Save combined results if we have any successful batches
+            if len(combined_df) > 0:
+                combined_df.to_csv(output_path, index=False)
+                self.logger.info(f"✅ Combined results from {successful_batches}/{len(batch_outputs)} batches")
+                self.logger.info(f"✅ Total records combined: {len(combined_df)}")
+                self.logger.info(f"✅ Combined results saved to: {output_path}")
+
+                # Cleanup batch files
+                for batch_file in batch_files:
+                    if os.path.exists(batch_file):
+                        os.remove(batch_file)
+                for batch_output in batch_outputs:
+                    if os.path.exists(batch_output):
+                        os.remove(batch_output)
+
+                return True
+            else:
+                self.logger.error("❌ No successful batches to combine")
+                return False
+
+        except Exception as e:
+            self.logger.error(f"❌ Batch processing failed: {e}")
+            return False
+
+    def _run_headless_batches(self, batch_files: list, batch_outputs: list) -> bool:
+        """
+        Run ZabaSearch processing on multiple batches using headless automation
+
+        Args:
+            batch_files: List of batch file paths to process
+            batch_outputs: List of output file paths for results
+
+        Returns:
+            bool: True if all batches processed successfully
+        """
+        try:
+            import threading
+            import time
+
+            def process_batch(batch_file, output_path, batch_num):
+                """Process a single batch file"""
+                try:
+                    self.logger.info(f"   🖥️ Batch {batch_num}: Starting ZabaSearch processing...")
+
+                    # Import and use zabasearch module directly
+                    import importlib.util
+
+                    # Load zabasearch module
+                    if os.path.exists('zabasearch_batch1_records_1_15.py'):
+                        spec = importlib.util.spec_from_file_location("zabasearch", 'zabasearch_batch1_records_1_15.py')
+                        if spec and spec.loader:
+                            zaba_module = importlib.util.module_from_spec(spec)
+                            spec.loader.exec_module(zaba_module)
+
+                            if hasattr(zaba_module, 'ZabaSearchExtractor'):
+                                # Create headless scraper and run the full processing
+                                scraper = zaba_module.ZabaSearchExtractor(headless=True)
+
+                                # Use the full async processing method with timeout
+                                import asyncio
+                                import signal
+
+                                async def run_batch():
+                                    try:
+                                        # Set a timeout of 3600 seconds (1 hour) per batch for ZabaSearch processing
+                                        await asyncio.wait_for(
+                                            scraper.process_csv_with_sessions(batch_file),
+                                            timeout=3600.0
+                                        )
+                                    except asyncio.TimeoutError:
+                                        self.logger.error(f"   ⏰ Batch {batch_num}: ZabaSearch processing timed out after 1 hour")
+                                        raise
+
+                                # Run the async processing with timeout
+                                try:
+                                    asyncio.run(run_batch())
+                                except Exception as e:
+                                    self.logger.error(f"   ❌ Batch {batch_num}: ZabaSearch processing failed: {e}")
+                                    return False
+
+                                # The results should be written back to the batch_file
+                                # Copy to output_path if different
+                                if batch_file != output_path and os.path.exists(batch_file):
+                                    import shutil
+                                    shutil.copy2(batch_file, output_path)
+                                    self.logger.info(f"   ✅ Batch {batch_num}: Results saved to {output_path}")
+                                    return True
+                                elif os.path.exists(output_path):
+                                    self.logger.info(f"   ✅ Batch {batch_num}: Processing completed")
+                                    return True
+                                else:
+                                    self.logger.error(f"   ❌ Batch {batch_num}: No results generated")
+                                    return False
+                            else:
+                                self.logger.error(f"   ❌ Batch {batch_num}: ZabaSearchExtractor not found in module")
+                                return False
+                        else:
+                            self.logger.error(f"   ❌ Batch {batch_num}: Failed to load module")
+                            return False
+                    else:
+                        self.logger.error(f"   ❌ Batch {batch_num}: zabasearch_batch1_records_1_15.py not found")
+                        return False
+
+                except Exception as e:
+                    self.logger.error(f"   ❌ Batch {batch_num}: Exception: {e}")
+                    return False
+
+            # Create and start threads with staggered starts to prevent proxy conflicts
+            threads = []
+            results = {}
+
+            self.logger.info(f"🚀 Starting {len(batch_files)} batches with staggered proxy sessions...")
+
+            for i, (batch_file, output_path) in enumerate(zip(batch_files, batch_outputs)):
+                def run_batch(bf=batch_file, op=output_path, bn=i+1):
+                    results[bn] = process_batch(bf, op, bn)
+
+                thread = threading.Thread(target=run_batch)
+                threads.append(thread)
+                thread.start()
+
+                # Staggered start: 10 second delay between batches to prevent proxy conflicts
+                if i < len(batch_files) - 1:  # Don't delay after the last one
+                    self.logger.info(f"   ⏸️ Waiting 10 seconds before starting batch {i+2} to prevent proxy conflicts...")
+                    time.sleep(10)
+
+            # Wait for all threads to complete
+            self.logger.info("⏳ Waiting for all batches to complete...")
+            for i, thread in enumerate(threads):
+                thread.join()
+                self.logger.info(f"   ✅ Batch {i+1} thread completed")
+
+            # Check if all batches succeeded
+            all_success = all(results.values())
+            if all_success:
+                self.logger.info("✅ All headless batches completed successfully")
+            else:
+                self.logger.error("❌ Some headless batches failed")
+
+            return all_success
+
+        except Exception as e:
+            self.logger.error(f"❌ Headless batch processing failed: {e}")
+            return False
+
+    def _run_zabasearch_processing(self, df: pd.DataFrame, output_path: str, original_csv_path: str) -> bool:
         """
         Run ZabaSearch processing on the dataframe
 
@@ -167,50 +449,285 @@ class PhoneSearchPipeline:
                     return False
 
                 # Run the ZabaSearch processing
-                if hasattr(zaba_module, 'ZabaSearchScraper'):
+                if hasattr(zaba_module, 'ZabaSearchExtractor'):
                     self.logger.info("🤖 Running ZabaSearch automation...")
-                    scraper = zaba_module.ZabaSearchScraper()
+                    scraper = zaba_module.ZabaSearchExtractor(headless=True)
 
                     # Create a temporary CSV for processing
                     temp_csv = f"temp/temp_processing_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-                    df.to_csv(temp_csv, index=False)
 
-                    # Run async processing
+                    # 🔧 COLUMN FORMAT FIX: Ensure ZabaSearch format compatibility
+                    self.logger.info("🔧 Ensuring ZabaSearch format compatibility...")
+
+                    # Create a copy of the DataFrame for ZabaSearch processing
+                    zaba_df = df.copy()
+
+                    # Check if we need to map columns from standardized format to ZabaSearch format
+                    if 'DirectName_Cleaned' in zaba_df.columns:
+                        self.logger.info("✅ File already has DirectName format - no column mapping needed")
+                    else:
+                        self.logger.info("🔧 Converting standardized format to ZabaSearch format...")
+
+                        # Map standardized columns to ZabaSearch expected format
+                        column_mapping = {}
+                        if 'Name' in zaba_df.columns:
+                            column_mapping['Name'] = 'DirectName_Cleaned'
+                        if 'Address' in zaba_df.columns:
+                            column_mapping['Address'] = 'DirectName_Address'
+                        if 'Phone' in zaba_df.columns:
+                            column_mapping['Phone'] = 'DirectName_Phone_Primary'
+
+                        # Rename columns
+                        if column_mapping:
+                            zaba_df = zaba_df.rename(columns=column_mapping)
+                            self.logger.info(f"📋 Mapped columns: {column_mapping}")
+
+                        # Add required DirectName_Type column (ZabaSearch expects this)
+                        if 'DirectName_Type' not in zaba_df.columns:
+                            zaba_df['DirectName_Type'] = 'Person'
+
+                    # Save the mapped DataFrame to temp CSV
+                    zaba_df.to_csv(temp_csv, index=False)
+                    self.logger.info(f"✅ Created ZabaSearch-compatible temp file: {temp_csv}")
+
+                    # Run async processing with correct method
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
 
                     try:
                         results = loop.run_until_complete(
-                            scraper.process_csv_file(temp_csv, max_records=len(df))
+                            scraper.process_csv_with_sessions(temp_csv)
                         )
 
-                        if results and len(results) > 0:
-                            # Save results
-                            results_df = pd.DataFrame(results)
-                            results_df.to_csv(output_path, index=False)
-                            self.logger.info(f"✅ ZabaSearch processing completed: {len(results)} results")
-                            return True
+                        # Check if ZabaSearch completed successfully by reading the temp file
+                        if os.path.exists(temp_csv):
+                            self.logger.info(f"🔍 Reading ZabaSearch results from: {temp_csv}")
+
+                            # Read the processed CSV to get the results
+                            try:
+                                processed_df = pd.read_csv(temp_csv)
+                                self.logger.info(f"📊 Processed file has {len(processed_df)} records")
+
+                                # Debug: Show all columns
+                                self.logger.info(f"📋 All columns: {list(processed_df.columns)}")
+
+                                # Check for phone data in the processed file
+                                phone_cols = [col for col in processed_df.columns if 'phone' in col.lower() or 'Phone' in col]
+                                self.logger.info(f"📞 Phone columns found: {phone_cols}")
+
+                                has_phone_data = False
+                                phone_record_count = 0
+
+                                if phone_cols:
+                                    for col in phone_cols:
+                                        col_count = processed_df[col].notna().sum()
+                                        self.logger.info(f"   {col}: {col_count} records with data")
+                                        if col_count > 0:
+                                            has_phone_data = True
+                                            phone_record_count += col_count
+
+                                self.logger.info(f"🎯 Total phone data entries found: {phone_record_count}")
+
+                            except Exception as read_error:
+                                self.logger.error(f"❌ Error reading temp file: {read_error}")
+                                has_phone_data = False
+
+                            if has_phone_data:
+                                self.logger.info(f"✅ ZabaSearch found phone data in columns: {phone_cols}")
+
+                                # COLUMN FORMAT FIX: Map ZabaSearch columns to expected format
+                                self.logger.info("🔧 Fixing column format mismatch...")
+
+                                # Create standardized phone columns
+                                if 'Primary_Phone' not in processed_df.columns:
+                                    processed_df['Primary_Phone'] = ''
+                                if 'Secondary_Phone' not in processed_df.columns:
+                                    processed_df['Secondary_Phone'] = ''
+
+                                # Map ZabaSearch phone data to standard columns
+                                for idx, row in processed_df.iterrows():
+                                    # Map primary phone
+                                    if pd.notna(row.get('DirectName_Phone_Primary')) and str(row.get('DirectName_Phone_Primary')).strip():
+                                        processed_df.at[idx, 'Primary_Phone'] = str(row.get('DirectName_Phone_Primary')).strip()
+
+                                    # Map secondary phone
+                                    if pd.notna(row.get('DirectName_Phone_Secondary')) and str(row.get('DirectName_Phone_Secondary')).strip():
+                                        processed_df.at[idx, 'Secondary_Phone'] = str(row.get('DirectName_Phone_Secondary')).strip()
+                                    elif pd.notna(row.get('Secondary_Phone')) and str(row.get('Secondary_Phone')).strip():
+                                        # Secondary_Phone might already be correctly named
+                                        processed_df.at[idx, 'Secondary_Phone'] = str(row.get('Secondary_Phone')).strip()
+
+                                # Count fixed phone data
+                                primary_count = processed_df['Primary_Phone'].apply(lambda x: bool(str(x).strip()) and str(x) != 'nan').sum()
+                                secondary_count = processed_df['Secondary_Phone'].apply(lambda x: bool(str(x).strip()) and str(x) != 'nan').sum()
+
+                                self.logger.info(f"✅ Column format fixed - Primary_Phone: {primary_count}, Secondary_Phone: {secondary_count}")
+
+                                results_df = processed_df
+
+                                # AUTO-MERGE: Apply enhanced phone merger automatically
+                                try:
+                                    from enhanced_phone_merger import EnhancedPhoneMerger
+                                    self.logger.info("🔗 Auto-merging phone data with enhanced merger...")
+
+                                    # Read original data for merging
+                                    original_df = read_data_file(original_csv_path)
+
+                                    # Use enhanced merger to merge DataFrames directly
+                                    merger = EnhancedPhoneMerger()
+                                    merge_result = merger.merge_phone_dataframes(original_df, results_df)
+
+                                    if merge_result and merge_result.get('success'):
+                                        self.logger.info(f"✅ Enhanced phone merger applied successfully:")
+                                        self.logger.info(f"   📞 Total records with phones: {merge_result.get('total_with_phones', 0)}")
+                                        self.logger.info(f"   🆕 New phone numbers found: {merge_result.get('new_phones_added', 0)}")
+                                        self.logger.info(f"   📊 Records processed: {merge_result.get('total_records', 0)}")
+
+                                        # Save the merged DataFrame
+                                        merged_df = merge_result.get('merged_df')
+                                        if merged_df is not None:
+                                            # Remove DirectName_Phone columns from merged output too
+                                            columns_to_drop = ['DirectName_Phone_Primary', 'DirectName_Phone_Secondary', 'DirectName_Phone_All']
+                                            final_merged_df = merged_df.drop(columns=[col for col in columns_to_drop if col in merged_df.columns])
+                                            final_merged_df.to_csv(output_path, index=False)
+                                            return True
+                                    else:
+                                        self.logger.warning("⚠️ Enhanced merger didn't complete successfully")
+
+                                except Exception as merge_error:
+                                    self.logger.error(f"❌ Enhanced phone merger failed: {merge_error}")
+                                    self.logger.info("📞 Falling back to standard ZabaSearch results...")
+
+                                # Save ZabaSearch results directly
+                                # Remove DirectName_Phone columns from output (keep only Primary_Phone and Secondary_Phone)
+                                columns_to_drop = ['DirectName_Phone_Primary', 'DirectName_Phone_Secondary', 'DirectName_Phone_All']
+                                final_results_df = results_df.drop(columns=[col for col in columns_to_drop if col in results_df.columns])
+                                final_results_df.to_csv(output_path, index=False)
+                                self.logger.info(f"✅ ZabaSearch processing completed: {len(results_df)} results")
+                                return True
+                            else:
+                                self.logger.warning("⚠️ ZabaSearch completed but no phone data found")
+                                # Save original data with proper headers when no phone data found
+                                columns_to_drop = ['DirectName_Phone_Primary', 'DirectName_Phone_Secondary', 'DirectName_Phone_All']
+                                final_processed_df = processed_df.drop(columns=[col for col in columns_to_drop if col in processed_df.columns])
+                                final_processed_df.to_csv(output_path, index=False)
+                                self.logger.info(f"✅ Saved processed data: {len(processed_df)} records")
+                                return True
                         else:
-                            self.logger.warning("⚠️ ZabaSearch returned no results")
+                            self.logger.error("❌ ZabaSearch temp file not found")
                             return False
 
                     finally:
                         loop.close()
-                        # Clean up temp file
+                        # Keep temp file for debugging - don't delete it immediately
                         if os.path.exists(temp_csv):
-                            os.remove(temp_csv)
+                            self.logger.info(f"🗂️ Temp file preserved for analysis: {temp_csv}")
+                            # os.remove(temp_csv)  # Commented out to preserve ZabaSearch results
 
                 else:
-                    self.logger.error("❌ ZabaSearchScraper class not found in module")
+                    self.logger.error("❌ ZabaSearchExtractor class not found in module")
                     return False
 
             except Exception as e:
                 self.logger.error(f"❌ Failed to import/run ZabaSearch module: {e}")
-                return False
+                # Try Radaris fallback when ZabaSearch completely fails
+                self.logger.info("🔄 ZabaSearch failed completely, trying Radaris fallback...")
+                return self._run_radaris_fallback(df, output_path)
 
         except Exception as e:
             self.logger.error(f"❌ ZabaSearch processing failed: {e}")
             return False
+
+    def _run_radaris_fallback(self, df: pd.DataFrame, output_path: str) -> bool:
+        """
+        Run Radaris processing as fallback when ZabaSearch fails
+
+        Args:
+            df: DataFrame to process
+            output_path: Path for output file
+
+        Returns:
+            bool: True if processing completed successfully
+        """
+        try:
+            self.logger.info("🔍 Starting Radaris fallback processing...")
+
+            # Import Radaris module
+            try:
+                import importlib.util
+
+                # Look for Radaris script
+                radaris_script = 'radaris_phone_scraper.py'
+
+                if os.path.exists(radaris_script):
+                    spec = importlib.util.spec_from_file_location("radaris", radaris_script)
+                    if spec and spec.loader:
+                        radaris_module = importlib.util.module_from_spec(spec)
+                        spec.loader.exec_module(radaris_module)
+                        self.logger.info(f"✅ Loaded Radaris module: {radaris_script}")
+
+                        # Run the Radaris processing
+                        if hasattr(radaris_module, 'RadarisPhoneScraper'):
+                            self.logger.info("🤖 Running Radaris automation...")
+
+                            # Create a temporary CSV for processing
+                            temp_csv = f"temp/temp_radaris_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+                            df.to_csv(temp_csv, index=False)
+
+                            # Initialize Radaris scraper
+                            scraper = radaris_module.RadarisPhoneScraper(temp_csv, output_path)
+
+                            # Run async processing
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+
+                            try:
+                                # Run the scraper using process_csv method
+                                await_result = loop.run_until_complete(
+                                    scraper.process_csv(start_row=0, max_rows=len(df))
+                                )
+
+                                # Check if output file was created and updated
+                                if os.path.exists(scraper.output_path):
+                                    results_df = read_data_file(scraper.output_path)
+                                    # Copy results to desired output path
+                                    results_df.to_csv(output_path, index=False)
+                                    self.logger.info(f"✅ Radaris processing completed: {len(results_df)} results")
+                                    return True
+                                else:
+                                    self.logger.warning("⚠️ Radaris did not create output file")
+                                    # Save original data as fallback
+                                    df.to_csv(output_path, index=False)
+                                    return True
+
+                            finally:
+                                loop.close()
+                                # Clean up temp file
+                                if os.path.exists(temp_csv):
+                                    os.remove(temp_csv)
+
+                        else:
+                            self.logger.error("❌ RadarisPhoneScraper class not found in module")
+                            # Save original data as fallback
+                            df.to_csv(output_path, index=False)
+                            return True
+                else:
+                    self.logger.warning("⚠️ Radaris script not found, saving original data")
+                    # Save original data as fallback
+                    df.to_csv(output_path, index=False)
+                    return True
+
+            except Exception as e:
+                self.logger.error(f"❌ Failed to import/run Radaris module: {e}")
+                # Save original data as fallback
+                df.to_csv(output_path, index=False)
+                return True
+
+        except Exception as e:
+            self.logger.error(f"❌ Radaris fallback processing failed: {e}")
+            # Save original data as final fallback
+            df.to_csv(output_path, index=False)
+            return True
 
     def analyze_csv(self, csv_path: str) -> dict:
         """
@@ -223,20 +740,19 @@ class PhoneSearchPipeline:
             dict: Analysis results
         """
         try:
-            if self.format_handler:
-                standardized_path = self.format_handler.standardize_to_search_format(csv_path)
-                if standardized_path:
-                    df = pd.read_csv(standardized_path)
-                else:
-                    df = pd.read_csv(csv_path)
-            else:
-                df = pd.read_csv(csv_path)
-
+            # For analysis, just use basic file reading since AI formatter is designed for processing
+            df = read_data_file(csv_path)
             if df is None or len(df) == 0:
-                return {'error': 'No data found in CSV'}
+                return {'error': 'No data found in file'}
 
             total_records = len(df)
-            phone_columns = [col for col in df.columns if 'phone' in col.lower() or 'telephone' in col.lower()]
+            phone_columns = [
+                col for col in df.columns
+                if any(keyword in col.lower() for keyword in [
+                    'phone', 'telephone', 'tel', 'mobile', 'cell',
+                    'radaris_phone', 'directname_phone', 'zaba_phone'
+                ])
+            ]
 
             if phone_columns:
                 phone_col = phone_columns[0]
@@ -251,7 +767,8 @@ class PhoneSearchPipeline:
                     'no_phone': no_phone,
                     'phone_percentage': round(phone_percentage, 2),
                     'phone_column': phone_col,
-                    'columns': list(df.columns)
+                    'columns': list(df.columns),
+                    'ai_analysis': self.ai_formatter is not None
                 }
             else:
                 return {
@@ -260,7 +777,8 @@ class PhoneSearchPipeline:
                     'no_phone': total_records,
                     'phone_percentage': 0.0,
                     'phone_column': 'None found',
-                    'columns': list(df.columns)
+                    'columns': list(df.columns),
+                    'ai_analysis': self.ai_formatter is not None
                 }
 
         except Exception as e:
@@ -268,63 +786,65 @@ class PhoneSearchPipeline:
             return {'error': str(e)}
 
 # Flask integration functions
-def process_phone_extraction(csv_path: str, max_records: int = 30):
+def process_phone_extraction(csv_path: str, max_records: Optional[int] = None):
     """
     Process phone extraction for Flask integration
-    
+
     Args:
         csv_path: Path to input CSV file
-        max_records: Maximum records to process
-        
+        max_records: Maximum records to process (optional)
+
     Returns:
         str: Path to output file or None if failed
     """
     try:
         pipeline = PhoneSearchPipeline()
-        
+
         # Create output filename
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_filename = f"phone_extraction_{timestamp}.csv"
         output_path = os.path.join('results', output_filename)
-        
+
         # Process the file
         success = pipeline.process_csv_direct(csv_path, output_path, max_records)
-        
+
         if success and os.path.exists(output_path):
             return output_path
         else:
             return None
-            
+
     except Exception as e:
         logging.error(f"Phone extraction failed: {e}")
         return None
 
 def main():
-    """Command line interface for testing"""
-    if len(sys.argv) < 2:
-        print("Usage: python phone_search_pipeline.py <csv_file> [max_records]")
-        return
+    """Command line interface with argument parsing"""
+    import argparse
 
-    csv_file = sys.argv[1]
-    max_records = int(sys.argv[2]) if len(sys.argv) > 2 else 10
+    parser = argparse.ArgumentParser(description='AI-Powered Phone Search Pipeline')
+    parser.add_argument('csv_file', help='Path to input CSV file')
+    parser.add_argument('--max-records', type=int, default=None, help='Maximum records to process (default: unlimited)')
+    parser.add_argument('--output', help='Output file path (optional)')
 
-    if not os.path.exists(csv_file):
-        print(f"Error: File {csv_file} not found")
+    args = parser.parse_args()
+
+    if not os.path.exists(args.csv_file):
+        print(f"❌ Error: File '{args.csv_file}' not found")
         return
 
     pipeline = PhoneSearchPipeline()
 
     # Analyze first
     print("\n📊 Analyzing CSV file...")
-    analysis = pipeline.analyze_csv(csv_file)
+    analysis = pipeline.analyze_csv(args.csv_file)
     print(f"Analysis results: {analysis}")
 
     # Process
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_file = f"results/phone_results_{timestamp}.csv"
+    output_file = args.output if args.output else f"results/phone_results_{timestamp}.csv"
 
     print(f"\n🚀 Starting processing...")
-    success = pipeline.process_csv_direct(csv_file, output_file, max_records)
+    success = pipeline.process_csv_direct(args.csv_file, output_file, args.max_records)
 
     if success:
         print(f"✅ Processing completed: {output_file}")

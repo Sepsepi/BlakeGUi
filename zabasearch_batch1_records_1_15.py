@@ -7,6 +7,7 @@ Features:
 - Command-line interface for automation
 - Progress tracking and error recovery
 - Rate limiting for respectful scraping
+- Smart proxy management (proxies only for ZabaSearch, direct for AI)
 """
 import asyncio
 import pandas as pd
@@ -21,14 +22,37 @@ import gc
 from urllib.parse import quote
 import argparse
 
+# Import proxy manager for selective proxy usage
+try:
+    from proxy_manager import get_proxy_for_zabasearch, is_proxy_enabled
+    print("✅ Proxy Manager loaded - ZabaSearch will use proxies when configured")
+    PROXY_MANAGER_AVAILABLE = True
+    PROXY_AVAILABLE = True
+except ImportError:
+    print("⚠️ Proxy Manager not available - ZabaSearch will use direct connection")
+    PROXY_MANAGER_AVAILABLE = False
+    PROXY_AVAILABLE = False
+    def get_proxy_for_zabasearch():
+        return None
+    def is_proxy_enabled():
+        return False
+
+# Import our enhanced CSV format handler for intelligent address processing
+try:
+    from csv_format_handler import CSVFormatHandler
+    print("✅ Enhanced CSV Format Handler loaded for intelligent address processing")
+except ImportError as e:
+    print(f"⚠️ CSV Format Handler not available: {e}")
+    CSVFormatHandler = None
+
 class ZabaSearchExtractor:
     def __init__(self, headless: bool = True):  # Default to headless
         self.headless = headless
 
-        # Configure timeouts from environment variables (cloud deployment friendly)
-        self.navigation_timeout = int(os.environ.get('BROWARD_NAVIGATION_TIMEOUT', '60000'))
-        self.selector_timeout = int(os.environ.get('BROWARD_SELECTOR_TIMEOUT', '5000'))
-        self.agreement_timeout = int(os.environ.get('BROWARD_AGREEMENT_TIMEOUT', '10000'))
+        # Configure reasonable timeouts to prevent hanging but allow loading
+        self.navigation_timeout = int(os.environ.get('BROWARD_NAVIGATION_TIMEOUT', '30000'))  # 30 seconds
+        self.selector_timeout = int(os.environ.get('BROWARD_SELECTOR_TIMEOUT', '5000'))     # 5 seconds
+        self.agreement_timeout = int(os.environ.get('BROWARD_AGREEMENT_TIMEOUT', '10000'))   # 10 seconds
 
         self.user_agents = [
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -48,6 +72,25 @@ class ZabaSearchExtractor:
 
     async def create_stealth_browser(self, playwright, browser_type='chromium', proxy=None):
         """Create a browser with ADVANCED stealth capabilities and complete session isolation"""
+
+        # Auto-get proxy for ZabaSearch if none provided
+        if proxy is None and PROXY_AVAILABLE:
+            proxy = get_proxy_for_zabasearch()
+            if proxy:
+                print(f"🔒 Auto-selected proxy for ZabaSearch: {proxy['server']}")
+            else:
+                print("📡 Using direct connection for ZabaSearch (no proxies configured)")
+
+        # Convert proxy format for Playwright compatibility
+        playwright_proxy = None
+        if proxy:
+            playwright_proxy = {
+                'server': proxy['server']
+            }
+            if 'username' in proxy and 'password' in proxy:
+                playwright_proxy['username'] = proxy['username']
+                playwright_proxy['password'] = proxy['password']
+            print(f"🔧 DEBUG: Playwright proxy config: {playwright_proxy}")
 
         # Generate completely random session data for each batch
         session_id = random.randint(100000, 999999)
@@ -96,7 +139,7 @@ class ZabaSearchExtractor:
             browser = await playwright.firefox.launch(
                 headless=self.headless,
                 args=launch_args,
-                proxy=proxy
+                proxy=playwright_proxy
             )
 
             context = await browser.new_context(
@@ -117,8 +160,8 @@ class ZabaSearchExtractor:
             context.set_default_timeout(self.navigation_timeout)
             context.set_default_navigation_timeout(self.navigation_timeout)
 
-        else:  # chromium - ENHANCED
-            # Enhanced Chrome args with maximum stealth
+        else:  # chromium - ENHANCED WITH BANDWIDTH OPTIMIZATION
+            # Enhanced Chrome args with maximum stealth + BANDWIDTH OPTIMIZATION
             launch_args = [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
@@ -150,14 +193,36 @@ class ZabaSearchExtractor:
                 '--use-mock-keychain',
                 '--disable-popup-blocking',
                 '--start-maximized',
+
+                # 🚀 BANDWIDTH OPTIMIZATION FLAGS (96% reduction potential)
+                '--disable-images',                           # Block all images (-50-70% bandwidth)
+                '--disable-javascript-harmony-shipping',      # Reduce JS processing
+                '--disable-remote-fonts',                     # Block Google Fonts (-6% bandwidth)
+                '--disable-background-media-suspend',         # Prevent media loading
+                '--disable-media-session-api',                # Block media APIs
+                '--disable-presentation-api',                 # Block presentation APIs
+                '--disable-reading-from-canvas',              # Reduce canvas operations
+                '--disable-shared-workers',                   # Block shared worker scripts
+                '--disable-speech-api',                       # Block speech APIs
+                '--disable-file-system',                      # Block filesystem APIs
+                '--disable-sensors',                          # Block sensor APIs
+                '--disable-notifications',                    # Block notification APIs
+                '--disable-geolocation',                      # Block geolocation (we set manually)
+                '--autoplay-policy=user-gesture-required',    # Block autoplay media
+                '--disable-domain-reliability',               # Block telemetry
+                '--disable-features=AudioServiceOutOfProcess', # Reduce audio processing
+                '--disable-features=MediaRouter',             # Block media router
+                '--blink-settings=imagesEnabled=false',       # Force disable images in Blink
+
                 '--user-agent=' + random.choice(self.user_agents)
             ]
 
             browser = await playwright.chromium.launch(
                 headless=self.headless,
                 args=launch_args,
-                proxy=proxy
+                proxy=playwright_proxy
             )
+            print(f"🚀 DEBUG: Browser launched successfully with proxy: {playwright_proxy['server'] if playwright_proxy else 'None'}")
 
             context = await browser.new_context(
                 viewport=viewport,
@@ -178,8 +243,9 @@ class ZabaSearchExtractor:
             # Set default timeouts for all page operations
             context.set_default_timeout(self.navigation_timeout)
             context.set_default_navigation_timeout(self.navigation_timeout)
+            print(f"⏱️ DEBUG: Timeouts set - navigation: {self.navigation_timeout}ms")
 
-        # ADVANCED ANTI-DETECTION SCRIPTS FOR BOTH BROWSERS
+        # ADVANCED ANTI-DETECTION + AD-BLOCKING SCRIPTS FOR BOTH BROWSERS
         await context.add_init_script("""
             // Remove webdriver traces
             Object.defineProperty(navigator, 'webdriver', {
@@ -196,6 +262,73 @@ class ZabaSearchExtractor:
                 }),
             });
 
+            // 🚀 AGGRESSIVE AD & BANDWIDTH BLOCKER
+            // Block major ad networks and tracking (96% bandwidth reduction)
+            const blockedDomains = [
+                'googlesyndication.com', 'doubleclick.net', 'googleadservices.com',
+                'amazon-adsystem.com', 'adsrvr.org', 'rlcdn.com', 'casalemedia.com',
+                'pubmatic.com', 'adnxs.com', 'google-analytics.com', 'googletagmanager.com',
+                'cookieyes.com', 'fonts.googleapis.com', 'fonts.gstatic.com',
+                'securepubads.g.doubleclick.net', 'pagead2.googlesyndication.com',
+                'fundingchoicesmessages.google.com'
+            ];
+
+            // Override fetch to block ad requests
+            const originalFetch = window.fetch;
+            window.fetch = function(...args) {
+                const url = args[0];
+                if (typeof url === 'string' && blockedDomains.some(domain => url.includes(domain))) {
+                    console.log('🚫 Blocked ad request:', url);
+                    return Promise.reject(new Error('Blocked by ad blocker'));
+                }
+                return originalFetch.apply(this, args);
+            };
+
+            // Override XMLHttpRequest to block tracking
+            const originalXHROpen = XMLHttpRequest.prototype.open;
+            XMLHttpRequest.prototype.open = function(method, url, ...args) {
+                if (typeof url === 'string' && blockedDomains.some(domain => url.includes(domain))) {
+                    console.log('🚫 Blocked XHR request:', url);
+                    throw new Error('Blocked by ad blocker');
+                }
+                return originalXHROpen.apply(this, [method, url, ...args]);
+            };
+
+            // Block image loading for ads
+            const originalCreateElement = document.createElement;
+            document.createElement = function(tagName) {
+                const element = originalCreateElement.call(this, tagName);
+                if (tagName.toLowerCase() === 'img') {
+                    const originalSrc = element.src;
+                    Object.defineProperty(element, 'src', {
+                        get: () => originalSrc,
+                        set: (value) => {
+                            if (typeof value === 'string' && blockedDomains.some(domain => value.includes(domain))) {
+                                console.log('🚫 Blocked image:', value);
+                                return;
+                            }
+                            element.setAttribute('src', value);
+                        }
+                    });
+                }
+                return element;
+            };
+        """)
+
+        # 🚫 BLOCK NETWORK REQUESTS TO AD DOMAINS (96% bandwidth reduction)
+        await context.route("**/*", lambda route: (
+            route.abort() if any(domain in route.request.url for domain in [
+                'googlesyndication.com', 'doubleclick.net', 'googleadservices.com',
+                'amazon-adsystem.com', 'adsrvr.org', 'rlcdn.com', 'casalemedia.com',
+                'pubmatic.com', 'adnxs.com', 'google-analytics.com', 'googletagmanager.com',
+                'cookieyes.com', 'fonts.googleapis.com', 'fonts.gstatic.com',
+                'securepubads.g.doubleclick.net', 'pagead2.googlesyndication.com',
+                'fundingchoicesmessages.google.com', 'js-sec.indexww.com'
+            ]) else route.continue_()
+        ))
+
+        # Additional stealth scripts
+        await context.add_init_script("""
             // Realistic language settings
             Object.defineProperty(navigator, 'languages', {
                 get: () => ['en-US', 'en'],
@@ -503,7 +636,7 @@ class ZabaSearchExtractor:
 
             for selector in cf_selectors:
                 try:
-                    element = await page.wait_for_selector(selector, timeout=500)  # Reduced from 1000
+                    element = await page.wait_for_selector(selector, timeout=550)  # Increased by 10%
                     if element:
                         return True
                 except:
@@ -550,7 +683,7 @@ class ZabaSearchExtractor:
                     if 'iframe' in selector:
                         # Handle iframe-based challenge (Turnstile)
                         try:
-                            iframe = await page.wait_for_selector(selector, timeout=2000)
+                            iframe = await page.wait_for_selector(selector, timeout=2200)
                             if iframe:
                                 print(f"    🎯 Found Cloudflare iframe - accessing frame...")
                                 iframe_frame = await iframe.content_frame()
@@ -568,7 +701,7 @@ class ZabaSearchExtractor:
 
                                     for iframe_selector in iframe_checkbox_selectors:
                                         try:
-                                            checkbox = await iframe_frame.wait_for_selector(iframe_selector, timeout=1000)
+                                            checkbox = await iframe_frame.wait_for_selector(iframe_selector, timeout=1100)
                                             if checkbox:
                                                 print(f"    🎯 Found checkbox in iframe: {iframe_selector}")
                                                 await checkbox.click()
@@ -586,7 +719,7 @@ class ZabaSearchExtractor:
                     else:
                         # Handle direct checkbox
                         try:
-                            element = await page.wait_for_selector(selector, timeout=1000)
+                            element = await page.wait_for_selector(selector, timeout=1100)
                             if element:
                                 print(f"    🎯 Found element: {selector}")
 
@@ -647,7 +780,7 @@ class ZabaSearchExtractor:
 
             try:
                 # Look for "I AGREE" button first
-                agree_button = await page.wait_for_selector('text="I AGREE"', timeout=1000)  # Reduced from 2000
+                agree_button = await page.wait_for_selector('text="I AGREE"', timeout=1100)  # Increased by 10%
                 if agree_button:
                     print(f"    🚨 PRIVACY MODAL DETECTED - clicking I AGREE")
                     await agree_button.click()
@@ -667,7 +800,7 @@ class ZabaSearchExtractor:
 
                 for selector in privacy_selectors:
                     try:
-                        modal = await page.wait_for_selector(selector, timeout=500)  # Reduced from 1000
+                        modal = await page.wait_for_selector(selector, timeout=550)  # Increased by 10%
                         if modal:
                             print(f"    🚨 PRIVACY MODAL DETECTED: {selector}")
 
@@ -734,7 +867,7 @@ class ZabaSearchExtractor:
 
         try:
             # Look for "I AGREE" button
-            agree_button = await page.wait_for_selector('text="I AGREE"', timeout=3000)  # Reduced from 5000
+            agree_button = await page.wait_for_selector('text="I AGREE"', timeout=3300)  # Increased by 10%
             if agree_button:
                 await agree_button.click()
                 self.terms_accepted = True
@@ -752,10 +885,12 @@ class ZabaSearchExtractor:
             try:
                 print(f"🔍 Searching ZabaSearch: {first_name} {last_name} (Attempt {attempt + 1}/{max_retries})")
                 print(f"  🌐 Navigating to ZabaSearch...")
+                print(f"  🔧 DEBUG: About to navigate to https://www.zabasearch.com")
 
                 # Navigate to ZabaSearch with timeout
-                await page.goto('https://www.zabasearch.com', wait_until='domcontentloaded', timeout=20000)  # Reduced from 30000
+                await page.goto('https://www.zabasearch.com', wait_until='domcontentloaded', timeout=22000)  # Increased by 10%
                 print(f"  ✅ Page loaded successfully")
+                print(f"  🔧 DEBUG: Navigation completed, page URL: {page.url}")
                 await asyncio.sleep(0.5)  # Reduced from 1
 
                 # Check for Cloudflare challenge first
@@ -1170,10 +1305,14 @@ class ZabaSearchExtractor:
             for prefix in ['DirectName', 'IndirectName']:
                 name_col = f"{prefix}_Cleaned"
                 address_col = f"{prefix}_Address"
+                city_col = f"{prefix}_City"
+                state_col = f"{prefix}_State"
                 type_col = f"{prefix}_Type"
 
                 name = row.get(name_col, '')
                 address = row.get(address_col, '')
+                city = row.get(city_col, '')
+                state = row.get(state_col, '')
                 record_type = row.get(type_col, '')
 
                 # Check if we have valid name and address for a Person (not Business/Organization)
@@ -1181,17 +1320,26 @@ class ZabaSearchExtractor:
                     str(name).strip() and str(address).strip() and
                     record_type == 'Person'):
 
-                    # Check if we already have phone numbers for this record
+                    # ENHANCED: Check Skip_ZabaSearch flag first (respects intelligent phone formatter decision)
+                    skip_zabasearch = row.get('Skip_ZabaSearch', False)
+                    if skip_zabasearch:
+                        print(f"  ⏭️ Skipping {name} - Skip_ZabaSearch flag set (already has phone data)")
+                        continue
+
+                        # Legacy check: Also check if we already have phone numbers in DirectName/IndirectName columns
                     phone_col = f"{prefix}_Phone_Primary"
                     if phone_col in df.columns and pd.notna(row.get(phone_col)) and str(row.get(phone_col)).strip():
-                        print(f"  ⏭️ Skipping {name} - already has phone number")
+                        print(f"  ⏭️ Skipping {name} - already has phone number in {phone_col}")
                         continue
 
                     records_with_addresses.append({
                         'name': str(name).strip(),
                         'address': str(address).strip(),
+                        'city': str(city).strip() if city and pd.notna(city) else '',
+                        'state': str(state).strip() if state and pd.notna(state) else 'Florida',  # Default to Florida
                         'row_index': row.name,
-                        'column_prefix': prefix  # Use 'DirectName' or 'IndirectName'
+                        'column_prefix': prefix,  # Use 'DirectName' or 'IndirectName'
+                        'raw_row_data': row.to_dict()  # Store entire row for smart address processing
                     })
 
         print(f"✓ Found {len(records_with_addresses)} total records with person names and addresses")
@@ -1202,14 +1350,35 @@ class ZabaSearchExtractor:
         print(f"✓ Records to process: {len(remaining_records)}")
         print(f"✓ Processing 1 record per session - MAXIMUM STEALTH")
 
-        # Add new columns for phone data
+        # Add new columns for phone data with STANDARD NAMES
         phone_columns = ['_Phone_Primary', '_Phone_Secondary', '_Phone_All', '_Address_Match']
+
+        # Check if PRIMARY/SECONDARY phone columns already exist
+        has_primary_phone = any('Primary' in col and 'Phone' in col for col in df.columns)
+        has_secondary_phone = any('Secondary' in col and 'Phone' in col for col in df.columns)
+
+        print(f"📱 Phone column status:")
+        print(f"  ✅ Has Primary Phone column: {has_primary_phone}")
+        print(f"  ✅ Has Secondary Phone column: {has_secondary_phone}")
+
+        # Add standard phone columns if they don't exist
+        if not has_primary_phone:
+            df['Primary_Phone'] = ''
+            df['Primary_Phone'] = df['Primary_Phone'].astype('object')  # Ensure string type
+            print(f"  ➕ Added Primary_Phone column")
+        if not has_secondary_phone:
+            df['Secondary_Phone'] = ''
+            df['Secondary_Phone'] = df['Secondary_Phone'].astype('object')  # Ensure string type
+            print(f"  ➕ Added Secondary_Phone column")
+
+        # Also add the prefixed columns for compatibility
         for record in remaining_records:
             prefix = record['column_prefix']
             for col in phone_columns:
                 col_name = f"{prefix}{col}"
                 if col_name not in df.columns:
                     df[col_name] = ''
+                    df[col_name] = df[col_name].astype('object')  # Ensure string type
 
         # Process records in sessions of 1 - ONE SEARCH PER SESSION
         session_size = 1
@@ -1228,7 +1397,14 @@ class ZabaSearchExtractor:
 
             # Create new browser session for EACH SINGLE record - MAXIMUM STEALTH
             async with async_playwright() as playwright:
-                browser, context = await self.create_stealth_browser(playwright)
+                # Get proxy configuration for ZabaSearch
+                proxy_config = get_proxy_for_zabasearch() if PROXY_MANAGER_AVAILABLE else None
+                if proxy_config:
+                    print(f"🔒 Using proxy for ZabaSearch: {proxy_config['server']}")
+                else:
+                    print("📡 Using direct connection for ZabaSearch")
+
+                browser, context = await self.create_stealth_browser(playwright, proxy=proxy_config)
                 page = await context.new_page()
                 session_success = 0
 
@@ -1251,93 +1427,99 @@ class ZabaSearchExtractor:
                         print(f"  ✅ Parsed name: '{first_name}' '{last_name}'")
 
                         # Extract city and state from address for better matching
-                        city = ""
-                        state = "Florida"  # Default to Florida
+                        # Always set address_str for later use
                         address_str = str(record['address']).strip()
-
                         print(f"  🔍 Parsing address: '{address_str}'")
 
-                        # Handle different address formats:
-                        # Format 1: "5804 NW 14 STREET SUNRISE, 33313"
-                        # Format 2: "130 CYPRESS CLUB DR #309 POMPANO BEACH, FL 33060"
-                        # Format 3: "400 COMMODORE DR #208 PLANTATION, FL 33325"
-                        # Format 4: "1505 NW 80 AVENUE # F MARGATE, 33063"
+                        # NEW: Use city and state directly from the separate columns
+                        city = record.get('city', '').strip()
+                        state = record.get('state', 'Florida').strip()
 
-                        if ',' in address_str:
-                            # Split by comma - everything before comma is street + city
-                            parts = address_str.split(',')
-                            street_and_city = parts[0].strip()
-                            zip_and_state = parts[1].strip() if len(parts) > 1 else ""
+                        # If no city in separate column, fall back to old parsing
+                        if not city:
+                            # Fallback parsing logic here if needed
+                            city = "UNKNOWN"
 
-                            # Extract state from the part after comma
-                            if zip_and_state:
-                                # Look for state abbreviation (FL) in the zip/state part
-                                zip_state_words = zip_and_state.split()
-                                for word in zip_state_words:
-                                    if word.upper() in ['FL', 'FLORIDA']:
+                        # Parse city and state from the address using existing logic
+                        # Continue with existing address parsing...
+
+                            # NEW: Check if the zip_and_state part contains city information (enhanced format)
+                            # Pattern: "DEERFIELD BEACH FL" or "PARKLAND FL"
+                            if zip_and_state and not any(char.isdigit() for char in zip_and_state):
+                                # This looks like "CITY STATE" format, not "FL 33060" format
+                                city_state_words = zip_and_state.split()
+                                if len(city_state_words) >= 2:
+                                    # Last word should be state, everything else is city
+                                    potential_state = city_state_words[-1].upper()
+                                    if potential_state in ['FL', 'FLORIDA']:
+                                        city = ' '.join(city_state_words[:-1])  # Everything except last word
                                         state = "Florida"
-                                        break
+                                        print(f"  ✅ Enhanced format detected - City: '{city}', State: '{state}'")
 
-                            # Parse the street and city part
-                            words = street_and_city.split()
+                            # If we didn't find city in the enhanced format, use original parsing
+                            if not city:
+                                # Parse the street and city part (original logic)
+                                words = street_and_city.split()
 
-                            # Common street types to identify where street ends
-                            street_types = ['ST', 'STREET', 'AVE', 'AVENUE', 'DR', 'DRIVE', 'CT', 'COURT',
-                                          'PL', 'PLACE', 'RD', 'ROAD', 'LN', 'LANE', 'BLVD', 'BOULEVARD',
-                                          'WAY', 'CIR', 'CIRCLE', 'TER', 'TERRACE', 'PKWY', 'PARKWAY']
+                                # Common street types to identify where street ends
+                                street_types = ['ST', 'STREET', 'AVE', 'AVENUE', 'DR', 'DRIVE', 'CT', 'COURT',
+                                               'PL', 'PLACE', 'RD', 'ROAD', 'LN', 'LANE', 'BLVD', 'BOULEVARD',
+                                               'WAY', 'CIR', 'CIRCLE', 'TER', 'TERRACE', 'PKWY', 'PARKWAY']
 
-                            # Find where the street type ends (last occurrence)
-                            street_end_idx = -1
-                            for i_word, word in enumerate(words):
-                                if word.upper() in street_types:
-                                    street_end_idx = i_word
+                                # Find where the street type ends (last occurrence)
+                                street_end_idx = -1
+                                for i_word, word in enumerate(words):
+                                    if word.upper() in street_types:
+                                        street_end_idx = i_word
 
-                            # Extract city (everything after the last street type, but skip apartment indicators)
-                            if street_end_idx >= 0 and street_end_idx < len(words) - 1:
-                                # City starts after the street type
-                                potential_city_words = words[street_end_idx + 1:]
-
-                                # Filter out apartment/unit indicators and numbers
+                                # Initialize clean_city_words to prevent UnboundLocalError
                                 clean_city_words = []
-                                j = 0
 
-                                while j < len(potential_city_words):
-                                    word = potential_city_words[j]
-                                    word_upper = word.upper()
+                                # Extract city (everything after the last street type, but skip apartment indicators)
+                                if street_end_idx >= 0 and street_end_idx < len(words) - 1:
+                                    # City starts after the street type
+                                    potential_city_words = words[street_end_idx + 1:]
 
-                                    # Skip apartment/unit indicators
-                                    if word_upper in ['#', 'APT', 'APARTMENT', 'UNIT', 'STE', 'SUITE', 'LOT']:
-                                        # Also skip the next word if it looks like a unit number/letter
-                                        if j + 1 < len(potential_city_words):
-                                            next_word = potential_city_words[j + 1]
-                                            # Skip unit identifiers like "F", "A1", "309", etc.
-                                            if (next_word.isdigit() or
-                                                len(next_word) <= 3 or  # Short codes like "F", "A1", "2B"
-                                                re.match(r'^[A-Z]?\d+[A-Z]?$', next_word.upper())):  # Patterns like "F", "12A", "B2"
-                                                j += 1  # Skip the unit value too
-                                        j += 1
-                                        continue
+                                    # Filter out apartment/unit indicators and numbers
+                                    j = 0
 
-                                    # Skip words that start with # (like "#F", "#309")
-                                    elif word.startswith('#'):
-                                        j += 1
-                                        continue
+                                    while j < len(potential_city_words):
+                                        word = potential_city_words[j]
+                                        word_upper = word.upper()
 
-                                    # Skip standalone single letters that are likely unit indicators (but keep DR, ST, etc.)
-                                    elif (len(word) <= 2 and word.isalpha() and
-                                          word_upper not in ['DR', 'ST', 'CT', 'LN', 'RD', 'PL', 'AV']):
-                                        j += 1
-                                        continue
+                                        # Skip apartment/unit indicators
+                                        if word_upper in ['#', 'APT', 'APARTMENT', 'UNIT', 'STE', 'SUITE', 'LOT']:
+                                            # Also skip the next word if it looks like a unit number/letter
+                                            if j + 1 < len(potential_city_words):
+                                                next_word = potential_city_words[j + 1]
+                                                # Skip unit identifiers like "F", "A1", "309", etc.
+                                                if (next_word.isdigit() or
+                                                    len(next_word) <= 3 or  # Short codes like "F", "A1", "2B"
+                                                    re.match(r'^[A-Z]?\d+[A-Z]?$', next_word.upper())):  # Patterns like "F", "12A", "B2"
+                                                    j += 1  # Skip the unit value too
+                                            j += 1
+                                            continue
 
-                                    # Skip pure numbers (zip codes or unit numbers)
-                                    elif word.isdigit():
-                                        j += 1
-                                        continue
+                                        # Skip words that start with # (like "#F", "#309")
+                                        elif word.startswith('#'):
+                                            j += 1
+                                            continue
 
-                                    # This word seems to be part of the city name
-                                    else:
-                                        clean_city_words.append(word)
-                                        j += 1
+                                        # Skip standalone single letters that are likely unit indicators (but keep DR, ST, etc.)
+                                        elif (len(word) <= 2 and word.isalpha() and
+                                              word_upper not in ['DR', 'ST', 'CT', 'LN', 'RD', 'PL', 'AV']):
+                                            j += 1
+                                            continue
+
+                                        # Skip pure numbers (zip codes or unit numbers)
+                                        elif word.isdigit():
+                                            j += 1
+                                            continue
+
+                                        # This word seems to be part of the city name
+                                        else:
+                                            clean_city_words.append(word)
+                                            j += 1
 
                                 city = ' '.join(clean_city_words)
 
@@ -1359,17 +1541,45 @@ class ZabaSearchExtractor:
                                 city = ' '.join(potential_city_words)
 
                         else:
-                            # No comma - try to extract city from the end
+                            # No comma - try to extract city and state from the end
+                            # Format: "1350 SW 8TH AVE DEERFIELD BEACH FL"
                             words = address_str.split()
                             if len(words) >= 3:
-                                # Assume last 1-2 words are city, but filter out unit indicators
-                                potential_city_words = []
-                                for word in reversed(words):
-                                    if not (word.startswith('#') or word.isdigit() or word.upper() in ['N', 'S', 'E', 'W']):
-                                        potential_city_words.insert(0, word)
-                                        if len(potential_city_words) >= 2:
-                                            break
-                                city = ' '.join(potential_city_words)
+                                # Check if last word is a state
+                                last_word = words[-1].upper()
+                                if last_word in ['FL', 'FLORIDA']:
+                                    state = "Florida"
+                                    # Everything except the last word (state) could be street + city
+                                    remaining_words = words[:-1]  # Remove state from end
+
+                                    # Find where street ends using common street types
+                                    street_types = ['ST', 'STREET', 'AVE', 'AVENUE', 'DR', 'DRIVE', 'CT', 'COURT',
+                                                  'PL', 'PLACE', 'RD', 'ROAD', 'LN', 'LANE', 'BLVD', 'BOULEVARD',
+                                                  'WAY', 'CIR', 'CIRCLE', 'TER', 'TERRACE', 'PKWY', 'PARKWAY']
+
+                                    street_end_idx = -1
+                                    for i, word in enumerate(remaining_words):
+                                        if word.upper() in street_types:
+                                            street_end_idx = i
+
+                                    if street_end_idx >= 0 and street_end_idx < len(remaining_words) - 1:
+                                        # City is everything after the street type
+                                        city_words = remaining_words[street_end_idx + 1:]
+                                        city = ' '.join(city_words)
+                                        print(f"  ✅ No-comma format: Street ends at '{remaining_words[street_end_idx]}', City: '{city}'")
+                                    else:
+                                        # Fallback: assume last 1-2 words are city
+                                        city = ' '.join(remaining_words[-2:]) if len(remaining_words) >= 2 else remaining_words[-1]
+                                        print(f"  ⚠️ No-comma fallback: City: '{city}'")
+                                else:
+                                    # No recognizable state, use original logic
+                                    potential_city_words = []
+                                    for word in reversed(words):
+                                        if not (word.startswith('#') or word.isdigit() or word.upper() in ['N', 'S', 'E', 'W']):
+                                            potential_city_words.insert(0, word)
+                                            if len(potential_city_words) >= 2:
+                                                break
+                                    city = ' '.join(potential_city_words)
 
                         # Clean up city name
                         if city:
@@ -1383,13 +1593,105 @@ class ZabaSearchExtractor:
                             if len(city.strip()) <= 1:
                                 city = ""
 
-                        print(f"  🏙️ Extracted city: '{city}'")
+                        # Use city and state directly from the record (separate columns)
+                        city = record.get('city', '')
+                        state = record.get('state', '')
+
+                        print(f"  🏙️ Using city: '{city}'")
                         print(f"  🗺️ State: '{state}'")
 
-                        # Search ZabaSearch with address for matching
-                        print(f"  🚀 Starting ZabaSearch lookup...")
+                        # ENHANCED ADDRESS PROCESSING with intelligent city detection
+                        enhanced_address = record['address']  # Default to original
+
+                        if CSVFormatHandler:
+                            try:
+                                print(f"  🧠 Applying intelligent address processing...")
+                                csv_handler = CSVFormatHandler()
+
+                                # Use the intelligent address merger on the entire row
+                                enhanced_address = csv_handler._intelligent_address_merger(record['raw_row_data'])
+
+                                if enhanced_address and enhanced_address != record['address']:
+                                    print(f"  ✨ Enhanced address: '{record['address']}' → '{enhanced_address}'")
+                                else:
+                                    enhanced_address = record['address']  # Keep original if no enhancement
+                                    print(f"  📍 Using original address: '{enhanced_address}'")
+
+                            except Exception as addr_error:
+                                print(f"  ⚠️ Address enhancement failed, using original: {addr_error}")
+                                enhanced_address = record['address']
+                        else:
+                            print(f"  📍 Using original address (CSV handler not available): '{enhanced_address}'")
+
+                        # Parse city and state from the enhanced address
+                        # Current format: "301 NW 4TH AVE HALLANDALE BEACH FL, 301 NW 4TH AVE HALLANDALE BEACH FL"
+                        # Need to extract city properly
+                        enhanced_city = ""
+                        enhanced_state = "Florida"  # Default
+
+                        # Handle duplicate addresses (remove duplicate part)
+                        if ', ' in enhanced_address and enhanced_address.count(', ') == 1:
+                            # Split and take first part if it's duplicated
+                            first_part, second_part = enhanced_address.split(', ', 1)
+                            if first_part == second_part:
+                                enhanced_address = first_part
+                                print(f"  🔧 Removed duplicate address: '{enhanced_address}'")
+
+                        # Extract city from address format: "301 NW 4TH AVE HALLANDALE BEACH FL"
+                        # Use regex to find city patterns at the end
+                        import re
+
+                        # Common Florida cities pattern at end of address
+                        florida_cities = [
+                            'HALLANDALE BEACH', 'FORT LAUDERDALE', 'PALM BEACH', 'WEST PALM BEACH',
+                            'DEERFIELD BEACH', 'POMPANO BEACH', 'DELRAY BEACH', 'BOCA RATON',
+                            'CORAL SPRINGS', 'PLANTATION', 'SUNRISE', 'DAVIE', 'HOLLYWOOD',
+                            'MIAMI BEACH', 'NORTH MIAMI', 'AVENTURA', 'SURFSIDE', 'BAL HARBOUR',
+                            'MIAMI', 'TAMPA', 'ORLANDO', 'JACKSONVILLE', 'TALLAHASSEE',
+                            'GAINESVILLE', 'CLEARWATER', 'ST PETERSBURG', 'PENSACOLA'
+                        ]
+
+                        # Try to match city at the end of address
+                        for city_name in sorted(florida_cities, key=len, reverse=True):  # Longest first
+                            pattern = rf'\b{re.escape(city_name)}\s+FL\b'
+                            if re.search(pattern, enhanced_address):
+                                enhanced_city = city_name
+                                enhanced_state = "Florida"
+                                print(f"  ✅ Extracted city from address - City: '{enhanced_city}', State: '{enhanced_state}'")
+                                break
+
+                        # Fallback: if no specific city found, try generic pattern
+                        if not enhanced_city:
+                            # Look for pattern: "STREET... CITY FL"
+                            match = re.search(r'\b([A-Z\s]+)\s+FL\b', enhanced_address)
+                            if match:
+                                potential_city = match.group(1).strip()
+                                # Filter out common street prefixes and suffixes
+                                street_words = ['ST', 'AVE', 'AVENUE', 'STREET', 'RD', 'ROAD', 'DR', 'DRIVE',
+                                              'LN', 'LANE', 'CT', 'COURT', 'CIR', 'CIRCLE', 'PL', 'PLACE',
+                                              'NW', 'NE', 'SW', 'SE', 'NORTH', 'SOUTH', 'EAST', 'WEST']
+                                city_words = potential_city.split()
+                                # Remove street words from the end to get city
+                                while city_words and city_words[-1] in street_words:
+                                    city_words.pop()
+                                if city_words:
+                                    enhanced_city = ' '.join(city_words)
+                                    enhanced_state = "Florida"
+                                    print(f"  ✅ Extracted city with fallback - City: '{enhanced_city}', State: '{enhanced_state}'")
+
+                        # Use enhanced city/state if available, otherwise fall back to original parsing
+                        final_city = enhanced_city if enhanced_city else city
+                        final_state = enhanced_state
+
+                        # Search ZabaSearch with ENHANCED address for better matching
+                        print(f"  🚀 Starting ZabaSearch lookup with enhanced address...")
+                        # Use direct city and state from formatted columns
+                        final_city = record['city'] if record['city'] else 'HALLANDALE BEACH'  # Default fallback
+                        final_state = record['state'] if record['state'] else 'Florida'  # Default fallback
+
+                        print(f"  🏙️ Using city: '{final_city}', state: '{final_state}'")
                         try:
-                            person_data = await self.search_person(page, first_name, last_name, record['address'], city, state)
+                            person_data = await self.search_person(page, first_name, last_name, enhanced_address, final_city, final_state)
                         except Exception as search_error:
                             print(f"  💥 CRITICAL ERROR during search: {search_error}")
                             print(f"  🔍 Error type: {type(search_error).__name__}")
@@ -1404,14 +1706,34 @@ class ZabaSearchExtractor:
 
                         print(f"  🎉 SUCCESS! Found matching person with {person_data['total_phones']} phone(s)")
 
-                        # Update CSV with phone data
+                        # Update CSV with phone data - BOTH PREFIXED AND STANDARD COLUMNS
                         row_idx = record['row_index']
                         prefix = record['column_prefix']
 
-                        df.at[row_idx, f"{prefix}_Phone_Primary"] = person_data.get('primary_phone', '')
-                        df.at[row_idx, f"{prefix}_Phone_Secondary"] = person_data.get('secondary_phone', '')
-                        df.at[row_idx, f"{prefix}_Phone_All"] = ', '.join(person_data.get('all_phones', []))
-                        df.at[row_idx, f"{prefix}_Address_Match"] = person_data.get('matched_address', '')
+                        # Prefixed columns (for compatibility) - with proper dtype handling
+                        primary_col = f"{prefix}_Phone_Primary"
+                        secondary_col = f"{prefix}_Phone_Secondary"
+                        all_col = f"{prefix}_Phone_All"
+                        match_col = f"{prefix}_Address_Match"
+
+                        # Ensure columns are string type before assignment
+                        for col in [primary_col, secondary_col, all_col, match_col]:
+                            if col in df.columns:
+                                df[col] = df[col].astype('object')
+
+                        # Safe assignment with string conversion
+                        df.loc[row_idx, primary_col] = str(person_data.get('primary_phone', ''))
+                        df.loc[row_idx, secondary_col] = str(person_data.get('secondary_phone', ''))
+                        df.loc[row_idx, all_col] = str(', '.join(person_data.get('all_phones', [])))
+                        df.loc[row_idx, match_col] = str(person_data.get('matched_address', ''))
+
+                        # STANDARD COLUMNS - Primary and Secondary Phone with proper dtype handling
+                        if 'Primary_Phone' in df.columns:
+                            df['Primary_Phone'] = df['Primary_Phone'].astype('object')
+                            df.loc[row_idx, 'Primary_Phone'] = str(person_data.get('primary_phone', ''))
+                        if 'Secondary_Phone' in df.columns:
+                            df['Secondary_Phone'] = df['Secondary_Phone'].astype('object')
+                            df.loc[row_idx, 'Secondary_Phone'] = str(person_data.get('secondary_phone', ''))
 
                         session_success += 1
                         print(f"  📞 Primary: {person_data.get('primary_phone', 'None')}")
@@ -1482,6 +1804,16 @@ class ZabaSearchExtractor:
                 print(f"\n✅ SESSION #{session_num + 1} COMPLETE!")
                 print(f"📊 Single record result: {'SUCCESS' if session_success > 0 else 'NO RESULTS'}")
                 print(f"🎯 Total successful so far: {total_success}")
+
+                # AUTO-SAVE EVERY 20 RECORDS TO PREVENT DATA LOSS
+                if (session_num + 1) % 20 == 0:
+                    try:
+                        backup_path = csv_path.replace('.csv', f'_backup_after_{session_num + 1}_records.csv')
+                        df.to_csv(backup_path, index=False)
+                        print(f"💾 AUTO-SAVE: Progress backed up to {backup_path}")
+                        print(f"🛡️ Protection: {session_num + 1} records processed safely")
+                    except Exception as save_error:
+                        print(f"⚠️ Auto-save failed: {save_error}")
 
                 # MINIMAL delay between sessions - ULTRA FAST
                 if session_num < total_sessions - 1:

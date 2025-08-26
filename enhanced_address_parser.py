@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 class EnhancedAddressParser:
     """Enhanced address parsing for multiple formats"""
-    
+
     def __init__(self):
         self.street_types = {
             'AVENUE': 'AVE', 'AV': 'AVE', 'AVE': 'AVE',
@@ -37,32 +37,81 @@ class EnhancedAddressParser:
             'TRAIL': 'TRL', 'TRL': 'TRL',
             'PARKWAY': 'PKWY', 'PKWY': 'PKWY'
         }
-        
-        self.directions = ['N', 'S', 'E', 'W', 'NE', 'NW', 'SE', 'SW', 
-                          'NORTH', 'SOUTH', 'EAST', 'WEST', 
+
+        self.directions = ['N', 'S', 'E', 'W', 'NE', 'NW', 'SE', 'SW',
+                          'NORTH', 'SOUTH', 'EAST', 'WEST',
                           'NORTHEAST', 'NORTHWEST', 'SOUTHEAST', 'SOUTHWEST']
-    
+
     def detect_address_format(self, df: pd.DataFrame) -> str:
         """Detect the address format in the dataframe"""
-        columns = [col.lower().strip() for col in df.columns]
-        
+        columns = [str(col).lower().strip() for col in df.columns]
+
+        # Check if columns are numeric (indicating no headers)
+        all_numeric_columns = all(str(col).isdigit() for col in df.columns)
+        if all_numeric_columns:
+            return 'no_headers'
+
+        # Check if the column names look like actual data rather than headers
+        # This happens when CSV doesn't have proper headers and first row becomes column names
+        data_like_headers = False
+        for col in df.columns:
+            col_str = str(col)
+            # Check for MLS ID patterns (like R11112092, A11838331)
+            if re.match(r'^[A-Z]\d{8}$', col_str):
+                data_like_headers = True
+                break
+            # Check for price patterns
+            if '$' in col_str and any(c.isdigit() for c in col_str):
+                data_like_headers = True
+                break
+            # Check for address patterns (street names)
+            if any(word in col_str.upper() for word in ['DRIVE', 'STREET', 'AVENUE', 'ROAD', 'WAY', 'CIRCLE', 'COURT', 'LANE']):
+                data_like_headers = True
+                break
+            # Check for city names that are common in South Florida
+            if col_str.upper() in ['HOLLYWOOD', 'PLANTATION', 'DAVIE', 'SUNRISE', 'WESTON', 'PARKLAND', 'CORAL SPRINGS', 'PEMBROKE PINES', 'FORT LAUDERDALE', 'MIAMI', 'BOYNTON BEACH', 'PORT ST LUCIE']:
+                data_like_headers = True
+                break
+            # Check for status indicators
+            if col_str in ['Pending', 'Active', 'Sold']:
+                data_like_headers = True
+                break
+
+        if data_like_headers:
+            logger.info("Detected that column headers contain actual data - treating as no_headers format")
+            return 'no_headers'
+
+        # Special handling for pending CSV format (positional columns)
+        if len(df.columns) >= 5:
+            # Check if this looks like our pending CSV format by examining the data
+            col3_sample = [str(df.iloc[i, 3]) for i in range(min(3, len(df))) if i < len(df)]
+            col4_sample = [str(df.iloc[i, 4]) for i in range(min(3, len(df))) if i < len(df)]
+
+            # Check if column 3 looks like street addresses and column 4 looks like cities
+            has_street_indicators = any(any(word in str(val).lower() for word in ['drive', 'street', 'road', 'avenue', 'way', 'circle', 'dr', 'st', 'rd', 'ave', 'boulevard', 'blvd']) for val in col3_sample if pd.notna(val))
+            has_numbers = any(any(char.isdigit() for char in str(val)) for val in col3_sample if pd.notna(val))
+
+            if has_street_indicators and has_numbers and len(col4_sample) > 0:
+                logger.info("Detected positional address format (pending CSV style)")
+                return 'positional'
+
         # Check for separated address format
         separated_indicators = ['house number', 'street name', 'street type', 'city name']
         has_separated = all(any(indicator in col for col in columns) for indicator in separated_indicators)
-        
+
         if has_separated:
             return 'separated'
-        
+
         # Check for combined address format
         combined_indicators = ['address', 'directname_address', 'full_address', 'street_address']
         has_combined = any(any(indicator in col for col in columns) for indicator in combined_indicators)
-        
+
         if has_combined:
             return 'combined'
-        
+
         # Check for mixed or unknown format
         return 'mixed'
-    
+
     def parse_separated_address(self, row: pd.Series) -> Dict[str, str]:
         """Parse address from separated columns"""
         try:
@@ -78,11 +127,11 @@ class EnhancedAddressParser:
                 'state': ['state abbreviation', 'state_abbreviation', 'state', 'st'],
                 'zip_code': ['zip code', 'zip_code', 'zip', 'zipcode', 'postal_code']
             }
-            
+
             # Extract values using flexible column matching
             address_parts = {}
             row_lower = {str(k).lower().strip(): v for k, v in row.items()}
-            
+
             for field, possible_columns in column_mapping.items():
                 value = None
                 for col_name in possible_columns:
@@ -94,46 +143,46 @@ class EnhancedAddressParser:
                         value = str(raw_value).strip()
                         if value and value.lower() not in ['nan', 'none', '', 'null']:
                             break
-                
+
                 address_parts[field] = value or ''
-            
+
             # Build the street address
             street_parts = []
-            
+
             # House number
             if address_parts['house_number']:
                 street_parts.append(address_parts['house_number'])
-            
+
             # Prefix direction
             if address_parts['prefix_direction']:
                 street_parts.append(address_parts['prefix_direction'].upper())
-            
+
             # Street name
             if address_parts['street_name']:
                 # Handle numeric street names (like "33RD")
                 street_name = address_parts['street_name'].upper()
                 street_parts.append(street_name)
-            
+
             # Street type
             if address_parts['street_type']:
                 street_type = address_parts['street_type'].upper()
                 # Standardize street type
                 street_type = self.street_types.get(street_type, street_type)
                 street_parts.append(street_type)
-            
+
             # Post direction
             if address_parts['post_direction']:
                 street_parts.append(address_parts['post_direction'].upper())
-            
+
             # Unit number (only if valid)
             if address_parts['unit_number'] and address_parts['unit_number'].lower() not in ['nan', 'none']:
                 street_parts.append(f"#{address_parts['unit_number']}")
-            
+
             street_address = " ".join(street_parts)
             city = address_parts['city'].upper() if address_parts['city'] else ''
             state = address_parts['state'].upper() if address_parts['state'] else 'FL'
             zip_code = address_parts['zip_code'] if address_parts['zip_code'] else ''
-            
+
             return {
                 'street_address': street_address,
                 'city': city,
@@ -141,29 +190,106 @@ class EnhancedAddressParser:
                 'zip_code': zip_code,
                 'bcpa_search_format': f"{street_address}, {city}" if street_address and city else ""
             }
-            
+
         except Exception as e:
             logger.error(f"Error parsing separated address: {e}")
             return {'street_address': '', 'city': '', 'state': '', 'zip_code': '', 'bcpa_search_format': ''}
-    
+
+    def parse_no_headers_format(self, row: pd.Series, address_col: int, city_col: int) -> Dict[str, str]:
+        """Parse address from files without headers using column positions"""
+        try:
+            # Get address and city from their positions
+            address_string = str(row.iloc[address_col]).strip() if len(row) > address_col else ""
+            city_string = str(row.iloc[city_col]).strip() if len(row) > city_col else ""
+
+            # Handle NaN, None, empty strings
+            if pd.isna(address_string) or address_string.lower() in ['nan', 'none', '', 'null']:
+                address_string = ""
+            if pd.isna(city_string) or city_string.lower() in ['nan', 'none', '', 'null']:
+                city_string = ""
+
+            if not address_string:
+                return {'street_address': '', 'city': '', 'state': '', 'zip_code': '', 'bcpa_search_format': ''}
+
+            # Clean up the address string
+            street_address = address_string.strip()
+            city = city_string.upper().strip() if city_string else ''
+
+            # Default to Florida
+            state = 'FL'
+            zip_code = ''
+
+            # Create BCPA search format
+            bcpa_format = f"{street_address}, {city}" if street_address and city else street_address
+
+            return {
+                'street_address': street_address,
+                'city': city,
+                'state': state,
+                'zip_code': zip_code,
+                'bcpa_search_format': bcpa_format
+            }
+
+        except Exception as e:
+            logger.error(f"Error parsing no-headers address: {e}")
+            return {'street_address': '', 'city': '', 'state': '', 'zip_code': '', 'bcpa_search_format': ''}
+
+    def parse_positional_format(self, row: pd.Series) -> Dict[str, str]:
+        """Parse address from positional CSV format (like pending listings)"""
+        try:
+            # For positional format: Column 3 = Street Address, Column 4 = City
+            street_address = ''
+            city = ''
+
+            # Get street address from column 3 (index 3)
+            if len(row) > 3:
+                addr_val = row.iloc[3]
+                if pd.notna(addr_val):
+                    street_address = str(addr_val).strip()
+
+            # Get city from column 4 (index 4)
+            if len(row) > 4:
+                city_val = row.iloc[4]
+                if pd.notna(city_val):
+                    city = str(city_val).upper().strip()
+
+            # Default to Florida
+            state = 'FL'
+            zip_code = ''
+
+            # Create BCPA search format
+            bcpa_format = f"{street_address}, {city}" if street_address and city else street_address
+
+            return {
+                'street_address': street_address,
+                'city': city,
+                'state': state,
+                'zip_code': zip_code,
+                'bcpa_search_format': bcpa_format
+            }
+
+        except Exception as e:
+            logger.error(f"Error parsing positional address: {e}")
+            return {'street_address': '', 'city': '', 'state': '', 'zip_code': '', 'bcpa_search_format': ''}
+
     def parse_combined_address(self, address_string: str) -> Dict[str, str]:
         """Parse address from combined string format"""
         try:
             if not address_string or str(address_string).lower() in ['nan', 'none', '', 'null']:
                 return {'street_address': '', 'city': '', 'state': '', 'zip_code': '', 'bcpa_search_format': ''}
-            
+
             address_string = str(address_string).strip()
-            
+
             # Handle formats like "10310 WATERSIDE CT, PARKLAND, FL, 33076"
             parts = [part.strip() for part in address_string.split(',')]
-            
+
             if len(parts) >= 2:
                 street_address = parts[0].strip()
                 city = parts[1].strip().upper()
-                
+
                 state = 'FL'  # Default for Florida
                 zip_code = ''
-                
+
                 # Extract state and zip from remaining parts
                 for part in parts[2:]:
                     part = part.strip()
@@ -181,7 +307,7 @@ class EnhancedAddressParser:
                                 state = sub_part.upper()
                             elif re.match(r'^\d{5}(-\d{4})?$', sub_part):
                                 zip_code = sub_part
-                
+
                 return {
                     'street_address': street_address,
                     'city': city,
@@ -189,15 +315,15 @@ class EnhancedAddressParser:
                     'zip_code': zip_code,
                     'bcpa_search_format': f"{street_address}, {city}"
                 }
-            
+
             # Handle single string without commas
             # Try to extract city from the end
             words = address_string.upper().split()
             if len(words) >= 3:
                 # Look for known Florida cities at the end
-                florida_cities = ['HOLLYWOOD', 'PARKLAND', 'FORT LAUDERDALE', 'MIAMI', 'PEMBROKE PINES', 
+                florida_cities = ['HOLLYWOOD', 'PARKLAND', 'FORT LAUDERDALE', 'MIAMI', 'PEMBROKE PINES',
                                 'CORAL SPRINGS', 'DAVIE', 'PLANTATION', 'SUNRISE', 'WESTON']
-                
+
                 for city in florida_cities:
                     city_words = city.split()
                     if len(words) >= len(city_words):
@@ -210,7 +336,7 @@ class EnhancedAddressParser:
                                 'zip_code': '',
                                 'bcpa_search_format': f"{street_address}, {city}"
                             }
-            
+
             # Fallback: treat entire string as street address
             return {
                 'street_address': address_string,
@@ -219,30 +345,30 @@ class EnhancedAddressParser:
                 'zip_code': '',
                 'bcpa_search_format': address_string
             }
-            
+
         except Exception as e:
             logger.error(f"Error parsing combined address: {e}")
             return {'street_address': '', 'city': '', 'state': '', 'zip_code': '', 'bcpa_search_format': ''}
-    
+
     def standardize_addresses_for_bcpa(self, df: pd.DataFrame) -> pd.DataFrame:
         """Standardize all addresses in the dataframe for BCPA searches"""
         try:
             logger.info("🏠 Standardizing addresses for BCPA search...")
-            
+
             # Make a copy to avoid modifying the original
             result_df = df.copy()
-            
+
             # Detect the address format
             format_type = self.detect_address_format(df)
             logger.info(f"📍 Detected address format: {format_type}")
-            
+
             # Initialize new columns
             result_df['BCPA_Street_Address'] = ''
             result_df['BCPA_City'] = ''
             result_df['BCPA_State'] = ''
             result_df['BCPA_Zip'] = ''
             result_df['BCPA_Search_Format'] = ''
-            
+
             if format_type == 'separated':
                 # Process separated format
                 for index, row in result_df.iterrows():
@@ -252,17 +378,17 @@ class EnhancedAddressParser:
                     result_df.at[index, 'BCPA_State'] = parsed['state']
                     result_df.at[index, 'BCPA_Zip'] = parsed['zip_code']
                     result_df.at[index, 'BCPA_Search_Format'] = parsed['bcpa_search_format']
-            
+
             elif format_type == 'combined':
                 # Find the address column
                 address_columns = ['DirectName_Address', 'address', 'Address', 'full_address', 'street_address']
                 address_col = None
-                
+
                 for col in address_columns:
                     if col in df.columns:
                         address_col = col
                         break
-                
+
                 if address_col:
                     logger.info(f"📍 Using combined address column: {address_col}")
                     for index, row in result_df.iterrows():
@@ -273,14 +399,40 @@ class EnhancedAddressParser:
                         result_df.at[index, 'BCPA_State'] = parsed['state']
                         result_df.at[index, 'BCPA_Zip'] = parsed['zip_code']
                         result_df.at[index, 'BCPA_Search_Format'] = parsed['bcpa_search_format']
-            
+
+            elif format_type == 'no_headers':
+                # Process file without headers - assume address in column 3 (index 3) and city in column 4 (index 4)
+                logger.info("📍 Processing file without headers - using column positions")
+                address_col_index = 3  # 4th column (0-indexed)
+                city_col_index = 4     # 5th column (0-indexed)
+
+                for index, row in result_df.iterrows():
+                    parsed = self.parse_no_headers_format(row, address_col_index, city_col_index)
+                    result_df.at[index, 'BCPA_Street_Address'] = parsed['street_address']
+                    result_df.at[index, 'BCPA_City'] = parsed['city']
+                    result_df.at[index, 'BCPA_State'] = parsed['state']
+                    result_df.at[index, 'BCPA_Zip'] = parsed['zip_code']
+                    result_df.at[index, 'BCPA_Search_Format'] = parsed['bcpa_search_format']
+
+            elif format_type == 'positional':
+                # Process positional CSV format (like pending listings)
+                logger.info("📍 Processing positional CSV format - Street in column 3, City in column 4")
+
+                for index, row in result_df.iterrows():
+                    parsed = self.parse_positional_format(row)
+                    result_df.at[index, 'BCPA_Street_Address'] = parsed['street_address']
+                    result_df.at[index, 'BCPA_City'] = parsed['city']
+                    result_df.at[index, 'BCPA_State'] = parsed['state']
+                    result_df.at[index, 'BCPA_Zip'] = parsed['zip_code']
+                    result_df.at[index, 'BCPA_Search_Format'] = parsed['bcpa_search_format']
+
             else:
                 # Mixed format - try both approaches
                 logger.info("📍 Processing mixed format - trying multiple approaches")
-                
+
                 for index, row in result_df.iterrows():
                     parsed = None
-                    
+
                     # First try separated format
                     separated_parsed = self.parse_separated_address(row)
                     if separated_parsed['bcpa_search_format']:
@@ -289,28 +441,28 @@ class EnhancedAddressParser:
                         # Try to find any address-like column
                         for col_name, value in row.items():
                             col_name_str = str(col_name)
-                            if ('address' in col_name_str.lower() or 'street' in col_name_str.lower()) and value:
+                            if ('address' in col_name_str.lower() or 'street' in col_name_str.lower()) and pd.notna(value) and str(value).strip():
                                 combined_parsed = self.parse_combined_address(value)
                                 if combined_parsed['bcpa_search_format']:
                                     parsed = combined_parsed
                                     break
-                    
+
                     if parsed:
                         result_df.at[index, 'BCPA_Street_Address'] = parsed['street_address']
                         result_df.at[index, 'BCPA_City'] = parsed['city']
                         result_df.at[index, 'BCPA_State'] = parsed['state']
                         result_df.at[index, 'BCPA_Zip'] = parsed['zip_code']
                         result_df.at[index, 'BCPA_Search_Format'] = parsed['bcpa_search_format']
-            
+
             # Count successful parsing
             valid_addresses = result_df['BCPA_Search_Format'].str.len() > 0
             success_count = valid_addresses.sum()
             total_count = len(result_df)
-            
+
             logger.info(f"✅ Successfully parsed {success_count}/{total_count} addresses ({(success_count/total_count)*100:.1f}%)")
-            
+
             return result_df
-            
+
         except Exception as e:
             logger.error(f"Error standardizing addresses: {e}")
             return df
@@ -318,10 +470,10 @@ class EnhancedAddressParser:
 def process_file_for_bcpa(input_path: str) -> pd.DataFrame:
     """
     Process any file format and prepare it for BCPA searches
-    
+
     Args:
         input_path: Path to input file (CSV or Excel)
-        
+
     Returns:
         pd.DataFrame: Processed dataframe with standardized addresses
     """
@@ -333,7 +485,7 @@ def process_file_for_bcpa(input_path: str) -> pd.DataFrame:
             # Try different encodings for CSV
             encodings = ['utf-8', 'latin1', 'cp1252']
             df = None
-            
+
             for encoding in encodings:
                 try:
                     df = pd.read_csv(input_path, encoding=encoding)
@@ -341,20 +493,38 @@ def process_file_for_bcpa(input_path: str) -> pd.DataFrame:
                     break
                 except:
                     continue
-            
+
             if df is None:
                 raise ValueError("Could not read CSV file with any standard encoding")
-        
+
         logger.info(f"📄 Loaded {len(df)} records from {input_path}")
-        
+
         # Initialize the address parser
         parser = EnhancedAddressParser()
-        
+
+        # Detect format to see if we need to re-read without headers
+        format_type = parser.detect_address_format(df)
+
+        if format_type == 'no_headers' and not all(str(col).isdigit() for col in df.columns):
+            # Column names contain data - need to re-read without headers
+            logger.info("🔄 Re-reading CSV without headers since first row contains data")
+            if input_path.endswith(('.xlsx', '.xls')):
+                df = pd.read_excel(input_path, header=None)
+            else:
+                # Use the same encoding that worked before
+                for encoding in encodings:
+                    try:
+                        df = pd.read_csv(input_path, encoding=encoding, header=None)
+                        logger.info(f"✅ Successfully re-read CSV without headers using {encoding} encoding")
+                        break
+                    except:
+                        continue
+
         # Standardize addresses
         processed_df = parser.standardize_addresses_for_bcpa(df)
-        
+
         return processed_df
-        
+
     except Exception as e:
         logger.error(f"Error processing file for BCPA: {e}")
         raise
@@ -362,23 +532,23 @@ def process_file_for_bcpa(input_path: str) -> pd.DataFrame:
 if __name__ == "__main__":
     # Test the address parser
     import sys
-    
+
     if len(sys.argv) < 2:
         print("Usage: python enhanced_address_parser.py <input_file>")
         sys.exit(1)
-    
+
     input_file = sys.argv[1]
-    
+
     try:
         result_df = process_file_for_bcpa(input_file)
-        
+
         # Save result
         output_file = input_file.replace('.csv', '_bcpa_ready.csv').replace('.xlsx', '_bcpa_ready.csv')
         result_df.to_csv(output_file, index=False)
-        
+
         print(f"✅ Processed file saved to: {output_file}")
         print(f"📊 Total records: {len(result_df)}")
         print(f"📍 Valid addresses: {(result_df['BCPA_Search_Format'].str.len() > 0).sum()}")
-        
+
     except Exception as e:
         print(f"❌ Error: {e}")
