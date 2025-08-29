@@ -2283,9 +2283,60 @@ def column_sync():
         logger.error(f"❌ Error in Column Syncer: {str(e)}")
         return jsonify({'error': f'Column Syncer failed: {str(e)}'}), 500
 
+
+def cleanup_session_batch_files(user_id: str, completed_filename: str):
+    """
+    Clean up session-specific batch files after successful download completion.
+    Only removes batch files belonging to the same user session.
+    
+    Args:
+        user_id: User session ID
+        completed_filename: The final output file that was downloaded
+    """
+    try:
+        user_config = get_user_config(user_id)
+        temp_folder = user_config['TEMP_FOLDER']
+        
+        if not os.path.exists(temp_folder):
+            return
+        
+        # Look for batch files with the session ID in the filename
+        batch_patterns = [
+            f"*batch*{user_id}*.csv",
+            f"*temp*{user_id}*.csv", 
+            f"{user_id}_batch*.csv",
+            f"batch*{user_id}*.csv"
+        ]
+        
+        cleaned_files = []
+        total_size = 0
+        
+        for pattern in batch_patterns:
+            batch_files = glob.glob(os.path.join(temp_folder, pattern))
+            
+            for batch_file in batch_files:
+                try:
+                    file_size = os.path.getsize(batch_file)
+                    os.remove(batch_file)
+                    cleaned_files.append(os.path.basename(batch_file))
+                    total_size += file_size
+                    logger.info(f"🧹 Removed batch file: {os.path.basename(batch_file)}")
+                except OSError as e:
+                    logger.warning(f"⚠️ Could not remove batch file {batch_file}: {e}")
+        
+        if cleaned_files:
+            size_mb = total_size / (1024 * 1024)
+            logger.info(f"✅ Batch cleanup complete for user {user_id}: {len(cleaned_files)} files, {size_mb:.2f} MB freed")
+            logger.info(f"📄 Completed file: {completed_filename}")
+        else:
+            logger.info(f"🧹 No batch files found for cleanup (User: {user_id})")
+            
+    except Exception as e:
+        logger.error(f"❌ Error during batch cleanup for user {user_id}: {e}")
+
 @app.route('/download/<filename>')
 def download_file(filename):
-    """Download processed files from user-specific directories."""
+    """Download processed files from user-specific directories with automatic batch cleanup."""
     try:
         # Get user session and directories
         user_id = get_user_id()
@@ -2295,18 +2346,30 @@ def download_file(filename):
         file_path = os.path.join(user_config['UPLOAD_FOLDER'], filename)
         if os.path.exists(file_path):
             logger.info(f"📥 File download: {filename} from uploads (User: {user_id})")
+            
+            # Perform session-specific batch cleanup after successful download
+            cleanup_session_batch_files(user_id, filename)
+            
             return send_file(file_path, as_attachment=True, download_name=filename)
 
         # Also check user's results folder
         file_path = os.path.join(user_config['RESULTS_FOLDER'], filename)
         if os.path.exists(file_path):
             logger.info(f"📥 File download: {filename} from results (User: {user_id})")
+            
+            # Perform session-specific batch cleanup after successful download
+            cleanup_session_batch_files(user_id, filename)
+            
             return send_file(file_path, as_attachment=True, download_name=filename)
 
         # Check user's temp folder as fallback
         file_path = os.path.join(user_config['TEMP_FOLDER'], filename)
         if os.path.exists(file_path):
             logger.info(f"📥 File download: {filename} from temp (User: {user_id})")
+            
+            # Perform session-specific batch cleanup after successful download
+            cleanup_session_batch_files(user_id, filename)
+            
             return send_file(file_path, as_attachment=True, download_name=filename)
 
         logger.warning(f"❌ File not found: {filename} (User: {user_id})")
@@ -2552,7 +2615,7 @@ def cleanup_files():
 
 @app.route('/recent_files', methods=['GET'])
 def get_recent_files():
-    """Get recent processed files for current user session"""
+    """Get recent processed files for current user session - FINAL OUTPUTS ONLY"""
     try:
         user_id = get_user_id()
         user_config = get_user_config(user_id)
@@ -2560,19 +2623,25 @@ def get_recent_files():
         # Get user-specific recent files by scanning user directories
         import glob
         
-        # Look for files in user's results directory
-        phone_pattern = os.path.join(user_config['RESULTS_FOLDER'], "*phone*.csv")
-        address_pattern = os.path.join(user_config['RESULTS_FOLDER'], "*address*.csv")
-        merged_pattern = os.path.join(user_config['RESULTS_FOLDER'], "*merged*.csv")
+        # 🎯 FILTER FOR FINAL OUTPUT FILES ONLY
+        # Look for final output files and merge files in user's results directory
+        final_output_patterns = [
+            os.path.join(user_config['RESULTS_FOLDER'], "*_processed.csv"),         # Final processed files
+            os.path.join(user_config['RESULTS_FOLDER'], "*_with_phones.csv"),      # Files with phone numbers
+            os.path.join(user_config['RESULTS_FOLDER'], "merge_*.csv"),            # Merge files
+            os.path.join(user_config['RESULTS_FOLDER'], "*merged*.csv"),           # Other merged files
+            os.path.join(user_config['RESULTS_FOLDER'], "*_final.csv"),            # Final output files
+            os.path.join(user_config['RESULTS_FOLDER'], "*_complete.csv")          # Complete files
+        ]
         
-        phone_files = glob.glob(phone_pattern)
-        address_files = glob.glob(address_pattern) 
-        merged_files = glob.glob(merged_pattern)
+        all_final_files = []
+        for pattern in final_output_patterns:
+            files = glob.glob(pattern)
+            all_final_files.extend(files)
         
-        # Sort by modification time (newest first)
-        phone_files.sort(key=os.path.getmtime, reverse=True)
-        address_files.sort(key=os.path.getmtime, reverse=True)
-        merged_files.sort(key=os.path.getmtime, reverse=True)
+        # Remove duplicates and sort by modification time (newest first)
+        all_final_files = list(set(all_final_files))
+        all_final_files.sort(key=os.path.getmtime, reverse=True)
         
         # Get file objects with metadata for display
         def get_file_info_list(file_paths):
@@ -2601,21 +2670,23 @@ def get_recent_files():
             return file_info_list
         
         # Convert to file info objects with metadata
-        phone_file_info = get_file_info_list(phone_files[:10])
-        address_file_info = get_file_info_list(address_files[:10]) 
-        merged_file_info = get_file_info_list(merged_files[:10])
+        final_file_info = get_file_info_list(all_final_files[:20])  # Limit to 20 most recent
         
-        logger.info(f"📁 Recent files filter: {len(phone_file_info)} phone files, {len(address_file_info)} address files")
-        logger.info(f"📱 Phone files: {[f['name'] for f in phone_file_info]}")
-        logger.info(f"🏠 Address files: {[f['name'] for f in address_file_info]}")
+        # Separate merge files for special handling
+        merge_files = [f for f in final_file_info if 'merge_' in f['name'].lower() or 'merged' in f['name'].lower()]
+        other_final_files = [f for f in final_file_info if f not in merge_files]
+        
+        logger.info(f"📁 Final files filter: {len(final_file_info)} total final files")
+        logger.info(f"� Merge files: {[f['name'] for f in merge_files]}")
+        logger.info(f"📄 Other final files: {[f['name'] for f in other_final_files[:5]]}")  # Log first 5
         
         return jsonify({
-            'phone_files': phone_file_info,
-            'address_files': address_file_info,
-            'merged_files': merged_file_info,
-            'total_phone': len(phone_file_info),
-            'total_address': len(address_file_info),
-            'total_merged': len(merged_file_info),
+            'final_files': final_file_info,
+            'merge_files': merge_files,
+            'other_files': other_final_files,
+            'total_files': len(final_file_info),
+            'total_merge': len(merge_files),
+            'total_other': len(other_final_files),
             'user_id': user_id  # For debugging
         })
     except Exception as e:
@@ -2631,6 +2702,61 @@ def get_cleanup_status():
     except Exception as e:
         logger.error(f"Error getting cleanup status: {str(e)}")
         return jsonify({'error': f'Error getting cleanup status: {str(e)}'}), 500
+
+@app.route('/cleanup_batch_files', methods=['POST'])
+def cleanup_batch_files():
+    """Manual cleanup of session-specific batch files"""
+    try:
+        user_id = get_user_id()
+        user_config = get_user_config(user_id)
+        temp_folder = user_config['TEMP_FOLDER']
+        
+        # Look for batch files with session-specific patterns
+        batch_patterns = [
+            f"*batch_*.csv",
+            f"*{user_id}*batch*.csv",
+            f"batch_*_{user_id}_*.csv",
+            f"temp_batch_*.csv"
+        ]
+        
+        cleaned_files = 0
+        freed_space = 0
+        cleaned_file_list = []
+        
+        for pattern in batch_patterns:
+            pattern_path = os.path.join(temp_folder, pattern)
+            for batch_file in glob.glob(pattern_path):
+                try:
+                    batch_filename = os.path.basename(batch_file)
+                    if (user_id in batch_filename or 
+                        'batch_' in batch_filename.lower() or 
+                        batch_filename.startswith('temp_batch')):
+                        
+                        file_size = os.path.getsize(batch_file)
+                        os.remove(batch_file)
+                        cleaned_files += 1
+                        freed_space += file_size
+                        cleaned_file_list.append(batch_filename)
+                        logger.info(f"🧹 Manual cleanup: {batch_filename} (User: {user_id})")
+                        
+                except Exception as e:
+                    logger.warning(f"⚠️ Could not remove batch file {batch_file}: {str(e)}")
+        
+        freed_mb = freed_space / (1024 * 1024)
+        result = {
+            'success': True,
+            'files_removed': cleaned_files,
+            'space_freed_mb': round(freed_mb, 2),
+            'cleaned_files': cleaned_file_list,
+            'message': f'Cleaned {cleaned_files} batch files, freed {freed_mb:.2f} MB'
+        }
+        
+        logger.info(f"✅ Manual batch cleanup complete: {cleaned_files} files removed, {freed_mb:.2f} MB freed (User: {user_id})")
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"❌ Error during manual batch cleanup: {str(e)} (User: {get_user_id()})")
+        return jsonify({'error': f'Cleanup failed: {str(e)}'}), 500
 
 @app.route('/system_info', methods=['GET'])
 def get_system_info():
