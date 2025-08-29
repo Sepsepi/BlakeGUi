@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, send_file, url_for, make_response
+from flask import Flask, render_template, request, jsonify, send_file, url_for, make_response, session
 import pandas as pd
 import os
 import logging
@@ -7,6 +7,7 @@ import re
 import glob
 import time
 import json
+import uuid
 from datetime import datetime
 from werkzeug.utils import secure_filename
 from werkzeug.exceptions import RequestEntityTooLarge
@@ -20,16 +21,66 @@ from column_syncer import ColumnSyncer
 # Create Flask application
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max file size
-app.config['UPLOAD_FOLDER'] = os.path.join(os.getcwd(), 'uploads')
-app.config['RESULTS_FOLDER'] = os.path.join(os.getcwd(), 'results')
+app.config['SECRET_KEY'] = 'blakegui-multi-user-session-key-2025'  # For session encryption
+
+# Base directories for user isolation
+app.config['BASE_UPLOAD_FOLDER'] = os.path.join(os.getcwd(), 'uploads')
+app.config['BASE_RESULTS_FOLDER'] = os.path.join(os.getcwd(), 'results')
+app.config['BASE_TEMP_FOLDER'] = os.path.join(os.getcwd(), 'temp')
 app.config['LOGS_FOLDER'] = os.path.join(os.getcwd(), 'logs')
 
-# Create necessary directories
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-os.makedirs(app.config['RESULTS_FOLDER'], exist_ok=True)
+# Backward compatibility - some parts still expect these
+app.config['UPLOAD_FOLDER'] = app.config['BASE_UPLOAD_FOLDER']
+app.config['RESULTS_FOLDER'] = app.config['BASE_RESULTS_FOLDER']
+
+# Create base directories
+os.makedirs(app.config['BASE_UPLOAD_FOLDER'], exist_ok=True)
+os.makedirs(app.config['BASE_RESULTS_FOLDER'], exist_ok=True)
+os.makedirs(app.config['BASE_TEMP_FOLDER'], exist_ok=True)
 os.makedirs(app.config['LOGS_FOLDER'], exist_ok=True)
-os.makedirs('temp', exist_ok=True)
 os.makedirs('output', exist_ok=True)
+
+# Session Management Functions
+def get_user_id():
+    """Get or create a unique user ID for the session"""
+    if 'user_id' not in session:
+        session['user_id'] = str(uuid.uuid4())
+        session.permanent = True  # Make session persistent
+        logger.info(f"🆔 New user session created: {session['user_id']}")
+    return session['user_id']
+
+def get_user_directories(user_id):
+    """Get user-specific directory paths"""
+    user_upload_dir = os.path.join(app.config['BASE_UPLOAD_FOLDER'], user_id)
+    user_results_dir = os.path.join(app.config['BASE_RESULTS_FOLDER'], user_id)
+    user_temp_dir = os.path.join(app.config['BASE_TEMP_FOLDER'], user_id)
+    
+    # Create user directories if they don't exist
+    os.makedirs(user_upload_dir, exist_ok=True)
+    os.makedirs(user_results_dir, exist_ok=True)
+    os.makedirs(user_temp_dir, exist_ok=True)
+    
+    return {
+        'upload': user_upload_dir,
+        'results': user_results_dir,
+        'temp': user_temp_dir
+    }
+
+def get_user_config(user_id):
+    """Get user-specific Flask config"""
+    user_dirs = get_user_directories(user_id)
+    return {
+        'UPLOAD_FOLDER': user_dirs['upload'],
+        'RESULTS_FOLDER': user_dirs['results'],
+        'TEMP_FOLDER': user_dirs['temp']
+    }
+
+@app.before_request
+def ensure_user_session():
+    """Ensure every request has a user session"""
+    user_id = get_user_id()
+    # Create user directories on every request to ensure they exist
+    get_user_directories(user_id)
 
 # Set up logging to logs folder
 log_file = os.path.join(app.config['LOGS_FOLDER'], 'enterprise_flask.log')
@@ -681,52 +732,55 @@ def index():
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
-    """Handle file upload and initial analysis."""
+    """Handle file upload and initial analysis with user session isolation."""
     try:
-        logger.info("File upload request received")
+        # Get user session and directories
+        user_id = get_user_id()
+        user_config = get_user_config(user_id)
+        logger.info(f"📁 File upload request from user: {user_id}")
 
         # Check if the post request has the file part
         if 'file' not in request.files:
-            logger.error("No file part in request")
+            logger.error(f"❌ No file part in request for user: {user_id}")
             return jsonify({'error': 'No file part in request'}), 400
 
         file = request.files['file']
 
         # If user does not select file, browser submits empty part without filename
         if file.filename == '':
-            logger.error("No file selected")
+            logger.error(f"❌ No file selected for user: {user_id}")
             return jsonify({'error': 'No file selected'}), 400
 
         if file and file.filename and allowed_file(file.filename):
-            logger.info(f"Processing file: {file.filename}")
+            logger.info(f"🔄 Processing file: {file.filename} for user: {user_id}")
             filename = secure_filename(file.filename)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"{timestamp}_{filename}"
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            filepath = os.path.join(user_config['UPLOAD_FOLDER'], filename)
 
-            # Save the uploaded file
+            # Save the uploaded file to user-specific directory
             file.save(filepath)
-            logger.info(f"File saved to: {filepath}")
+            logger.info(f"💾 File saved to user directory: {filepath}")
 
             try:
                 # Get tab type from form data
                 tab_type = request.form.get('tabType', 'phone')  # Default to phone if not specified
-                logger.info(f"Processing for tab type: {tab_type}")
+                logger.info(f"🎯 Processing for tab type: {tab_type} (User: {user_id})")
 
                 # FIRST: Analyze the ORIGINAL uploaded file (before any processing)
                 original_df = read_data_file(filepath)
-                logger.info(f"📊 Analyzing original uploaded file: {len(original_df)} records")
+                logger.info(f"📊 Analyzing original uploaded file: {len(original_df)} records (User: {user_id})")
 
                 if tab_type == 'phone':
                     original_analysis = analyze_phone_coverage(original_df)
-                    logger.info(f"📊 Original file phone analysis: {original_analysis}")
+                    logger.info(f"📊 Original file phone analysis: {original_analysis} (User: {user_id})")
                 elif tab_type == 'columnSync':
                     # For Column Syncer, analyze phone coverage
                     original_analysis = analyze_phone_coverage(original_df)
-                    logger.info(f"📊 Original file Column Syncer analysis: {original_analysis}")
+                    logger.info(f"📊 Original file Column Syncer analysis: {original_analysis} (User: {user_id})")
                 else:
                     original_analysis = analyze_address_coverage(original_df)
-                    logger.info(f"📊 Original file address analysis: {original_analysis}")
+                    logger.info(f"📊 Original file address analysis: {original_analysis} (User: {user_id})")
 
                 # Route processing based on tab type
                 if tab_type == 'phone':
@@ -739,16 +793,16 @@ def upload_file():
 
                     if result['success']:
                         processed_df = pd.read_csv(result['output_path'])
-                        logger.info(f"✅ AI phone formatting completed - {len(processed_df)} records")
-                        # Copy the AI-formatted file to results folder for consistency
+                        logger.info(f"✅ AI phone formatting completed - {len(processed_df)} records (User: {user_id})")
+                        # Copy the AI-formatted file to user's results folder
                         import shutil
                         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                         results_filename = f"phone_formatted_{timestamp}.csv"
-                        results_path = os.path.join(app.config['RESULTS_FOLDER'], results_filename)
+                        results_path = os.path.join(user_config['RESULTS_FOLDER'], results_filename)
                         shutil.copy2(result['output_path'], results_path)
                     else:
                         # If AI formatter fails, return error instead of using buggy fallback
-                        logger.error(f"❌ AI phone formatter failed: {result.get('error', 'Unknown error')}")
+                        logger.error(f"❌ AI phone formatter failed: {result.get('error', 'Unknown error')} (User: {user_id})")
                         return jsonify({
                             'error': f"AI phone formatter failed: {result.get('error', 'Please check your file format and try again')}"
                         }), 400
@@ -756,7 +810,7 @@ def upload_file():
                 elif tab_type == 'columnSync':
                     # Use Column Syncer for mobile validation - immediate processing and download
                     from column_syncer import ColumnSyncer
-                    logger.info(f"🔧 Starting Column Syncer processing...")
+                    logger.info(f"🔧 Starting Column Syncer processing... (User: {user_id})")
 
                     syncer = ColumnSyncer()
                     result = syncer.process_file(filepath)
@@ -764,15 +818,15 @@ def upload_file():
                     if result['success']:
                         # Read the processed file
                         processed_df = pd.read_csv(result['output_file'])
-                        logger.info(f"✅ Column Syncer complete: {len(processed_df)} records processed")
+                        logger.info(f"✅ Column Syncer complete: {len(processed_df)} records processed (User: {user_id})")
 
-                        # Save with Clean_ prefix + original filename
+                        # Save with Clean_ prefix + original filename to user's results folder
                         original_name = os.path.splitext(filename)[0]
                         original_ext = os.path.splitext(filename)[1]
                         clean_filename = f"Clean_{original_name}{original_ext}"
-                        results_path = os.path.join(app.config['RESULTS_FOLDER'], clean_filename)
+                        results_path = os.path.join(user_config['RESULTS_FOLDER'], clean_filename)
                         processed_df.to_csv(results_path, index=False)
-                        logger.info(f"💾 Column Syncer results saved: {clean_filename}")
+                        logger.info(f"💾 Column Syncer results saved: {clean_filename} (User: {user_id})")
 
                         # Return immediate download response instead of analysis
                         stats = result.get('stats', {})
@@ -1031,11 +1085,13 @@ def separate_records():
             with_description = 'Records With Valid Addresses'
             without_description = 'Records Without Valid Addresses'
 
-        # Save separated files
+        # Save separated files in user-specific directory
+        user_id = get_user_id()
+        user_config = get_user_config(user_id)
         base_name = os.path.splitext(os.path.basename(filepath))[0]
 
-        with_file = os.path.join(app.config['RESULTS_FOLDER'], f"{base_name}_{with_label}.csv")
-        without_file = os.path.join(app.config['RESULTS_FOLDER'], f"{base_name}_{without_label}.csv")
+        with_file = os.path.join(user_config['RESULTS_FOLDER'], f"{base_name}_{with_label}.csv")
+        without_file = os.path.join(user_config['RESULTS_FOLDER'], f"{base_name}_{without_label}.csv")
 
         files_created = []
 
@@ -1068,15 +1124,22 @@ def separate_records():
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
-    """Process files based on analysis type (phone, address, bcpa)."""
+    """Process files based on analysis type (phone, address, bcpa) with user session isolation."""
     try:
+        # Get user session and directories
+        user_id = get_user_id()
+        user_config = get_user_config(user_id)
+        
         data = request.get_json()
         filepath = data.get('filepath')
         analysis_type = data.get('analysis_type', 'phone')
         max_records = int(data.get('max_records', 0))  # 0 means unlimited
 
         if not filepath or not os.path.exists(filepath):
+            logger.error(f"❌ File not found: {filepath} (User: {user_id})")
             return jsonify({'error': 'File not found'}), 404
+
+        logger.info(f"🔄 Starting analysis: {analysis_type} for {filepath} (User: {user_id})")
 
         # The filepath sent from frontend is typically the PROCESSED file
         # We need to determine the original file and processed file paths
@@ -1096,7 +1159,7 @@ def analyze():
 
             # Try different extensions for the clean original file
             # First, try to find with timestamp prefix (most common case)
-            upload_dir = os.path.dirname(filepath)
+            upload_dir = user_config['UPLOAD_FOLDER']  # Use user-specific upload directory
             timestamp_pattern = processed_basename.split('_')[0] + '_' + processed_basename.split('_')[1]  # Extract timestamp like "20250822_111415"
 
             # Try different combinations: timestamped and clean names with different extensions
@@ -1154,7 +1217,7 @@ def analyze():
 
             def run_phone_processing():
                 try:
-                    result_container['result'] = phone_search_pipeline.process_phone_extraction(analysis_filepath, max_records)
+                    result_container['result'] = phone_search_pipeline.process_phone_extraction(analysis_filepath, max_records, user_config)
                     result_container['completed'] = True
                 except Exception as e:
                     result_container['error'] = str(e)
@@ -1181,8 +1244,8 @@ def analyze():
             result_file = result_container['result']
 
             # CRITICAL FIX: Check for batch result files and combined results
-            # First check if combined results already exist
-            combined_pattern = os.path.join(app.config['RESULTS_FOLDER'], 'phone_extraction_*.csv')
+            # First check if combined results already exist in user's results folder
+            combined_pattern = os.path.join(user_config['RESULTS_FOLDER'], 'phone_extraction_*.csv')
             combined_files = glob.glob(combined_pattern)
 
             # Filter for files that might contain batch results (look for newer files)
@@ -1191,7 +1254,7 @@ def analyze():
             if recent_combined:
                 # Find the most recent combined result file
                 latest_combined = max(recent_combined, key=os.path.getctime)
-                logger.info(f"🔍 Found recent combined results file: {latest_combined}")
+                logger.info(f"🔍 Found recent combined results file: {latest_combined} (User: {user_id})")
 
                 # Check if it has phone data (columns with phones and actual data)
                 try:
@@ -1214,29 +1277,30 @@ def analyze():
                             original_basename = os.path.basename(original_filepath)
                             base_name = os.path.splitext(original_basename)[0]
                             merged_filename = f"Merged_{base_name}.csv"
-                            merged_filepath = os.path.join(app.config['RESULTS_FOLDER'], merged_filename)
+                            merged_filepath = os.path.join(user_config['RESULTS_FOLDER'], merged_filename)
 
                             # Perform the merge using original file + combined results
                             merge_result = merger.merge_phone_results(original_filepath, latest_combined, merged_filepath)
 
                             if merge_result.get('success'):
-                                logger.info(f"🎉 Enhanced merge completed successfully!")
-                                logger.info(f"📞 Records updated: {merge_result.get('records_updated', 0)}")
+                                logger.info(f"🎉 Enhanced merge completed successfully! (User: {user_id})")
+                                logger.info(f"📞 Records updated: {merge_result.get('records_updated', 0)} (User: {user_id})")
 
                                 # Return the merged file as the main result
                                 result_file = merged_filepath
 
                                 # Prepare response for immediate return
                                 download_url = url_for('download_file', filename=os.path.basename(result_file))
-                                logger.info(f"📥 Auto-downloading merged file: {os.path.basename(result_file)}")
+                                logger.info(f"📥 Auto-downloading merged file: {os.path.basename(result_file)} (User: {user_id})")
 
                                 response = jsonify({
-                                    'message': f'Process completed with enhanced merge',
+                                    'message': f'Process completed with enhanced merge (User: {user_id[:8]})',
                                     'download_url': download_url,
                                     'output_file': os.path.basename(result_file),
                                     'records_updated': merge_result.get('records_updated', 0),
                                     'success_rate': merge_result.get('success_rate', 'N/A'),
-                                    'auto_download': True
+                                    'auto_download': True,
+                                    'user_id': user_id[:8]  # Show first 8 chars of user ID
                                 })
 
                                 # CRITICAL: Return immediately to prevent double JSON response
@@ -1259,9 +1323,14 @@ def analyze():
                     pass
 
             # If no good combined file, check for temp files
+            temp_files = []  # Initialize to avoid UnboundLocalError
             if not result_file or not os.path.exists(result_file):
-                temp_pattern = os.path.join('temp', 'temp_processing_*.csv')
+                temp_pattern = os.path.join(user_config['TEMP_FOLDER'], 'temp_processing_*.csv')
+                logger.info(f"🔍 Searching for temp files with pattern: {temp_pattern}")
                 temp_files = glob.glob(temp_pattern)
+                logger.info(f"🔍 Found {len(temp_files)} temp files: {temp_files}")
+            else:
+                logger.info(f"🔍 Using existing result file: {result_file}")
 
             if temp_files:
                 # Find the most recent temp file
@@ -1357,10 +1426,12 @@ def analyze():
                     df.to_csv(fallback_file, index=False)
                     result_file = fallback_file
             else:
-                logger.warning("⚠️ No temp files found - using original result file")
+                logger.warning(f"⚠️ No temp files found - searched in: {user_config['TEMP_FOLDER']}")
+                logger.info(f"🔍 Temp folder contents: {os.listdir(user_config['TEMP_FOLDER']) if os.path.exists(user_config['TEMP_FOLDER']) else 'Folder does not exist'}")
+                logger.info("⚠️ Creating result file from processed data")
                 # Create basic result file from processed data
                 df = read_data_file(analysis_filepath)
-                fallback_file = os.path.join(app.config['RESULTS_FOLDER'], f"phone_extraction_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+                fallback_file = os.path.join(user_config['RESULTS_FOLDER'], f"phone_extraction_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
                 df.to_csv(fallback_file, index=False)
                 result_file = fallback_file
 
@@ -1596,8 +1667,12 @@ def process_enhanced_address_pipeline(filepath, max_records):
         # Step 2: Use BCPA to process addresses and get owner information
         logger.info(f"🏠 Processing {len(df_limited)} addresses with BCPA for reverse extraction")
 
+        # Get user session for user-specific directories
+        user_id = get_user_id()
+        user_config = get_user_config(user_id)
+
         # Create temp file with filtered records for BCPA processing
-        temp_input = os.path.join(app.config['UPLOAD_FOLDER'], f"temp_reverse_address_{timestamp}.csv")
+        temp_input = os.path.join(user_config['TEMP_FOLDER'], f"temp_reverse_address_{timestamp}.csv")
         df_limited.to_csv(temp_input, index=False)
 
         # Use BCPA to process the addresses
@@ -1630,18 +1705,20 @@ def process_enhanced_address_pipeline(filepath, max_records):
             with_phones = pd.DataFrame()
             without_phones = bcpa_df.copy()
 
-        # Step 3: Create separated output files
+        # Step 3: Create separated output files in user-specific directory
+        user_id = get_user_id()
+        user_config = get_user_config(user_id)
         base_name = f"reverse_address_extracted_{timestamp}"
 
         # Save the main enhanced file (with BCPA owner data for records without names)
-        main_output_file = os.path.join(app.config['RESULTS_FOLDER'], f"{base_name}_with_owners.csv")
+        main_output_file = os.path.join(user_config['RESULTS_FOLDER'], f"{base_name}_with_owners.csv")
         bcpa_df.to_csv(main_output_file, index=False, encoding='utf-8')
 
         # Save separated files
         files_created = []
 
         if not with_phones.empty:
-            with_phones_file = os.path.join(app.config['RESULTS_FOLDER'], f"{base_name}_with_phones.csv")
+            with_phones_file = os.path.join(user_config['RESULTS_FOLDER'], f"{base_name}_with_phones.csv")
             with_phones.to_csv(with_phones_file, index=False, encoding='utf-8')
             files_created.append({
                 'type': 'with_phones',
@@ -1651,7 +1728,7 @@ def process_enhanced_address_pipeline(filepath, max_records):
             logger.info(f"✅ Created with_phones file: {len(with_phones)} records")
 
         if not without_phones.empty:
-            without_phones_file = os.path.join(app.config['RESULTS_FOLDER'], f"{base_name}_without_phones.csv")
+            without_phones_file = os.path.join(user_config['RESULTS_FOLDER'], f"{base_name}_without_phones.csv")
             without_phones.to_csv(without_phones_file, index=False, encoding='utf-8')
             files_created.append({
                 'type': 'without_phones',
@@ -1661,7 +1738,7 @@ def process_enhanced_address_pipeline(filepath, max_records):
             logger.info(f"✅ Created without_phones file: {len(without_phones)} records")
 
         # Step 4: Create a summary file with all results
-        summary_file = os.path.join(app.config['RESULTS_FOLDER'], f"{base_name}_summary.csv")
+        summary_file = os.path.join(user_config['RESULTS_FOLDER'], f"{base_name}_summary.csv")
 
         # Add processing summary columns
         bcpa_df['Processing_Summary'] = 'Address Enhanced with BCPA'
@@ -2127,10 +2204,14 @@ def bcpa_reverse_search():
         except ImportError:
             return jsonify({'error': 'BCPA integration module not available'}), 500
 
+        # Get user session for user-specific directories
+        user_id = get_user_id()
+        user_config = get_user_config(user_id)
+
         # Process the file
         success, output_file, summary = process_bcpa_reverse_search(
             file_path,
-            output_dir=app.config['UPLOAD_FOLDER'],
+            output_dir=user_config['RESULTS_FOLDER'],
             max_addresses=max_addresses
         )
 
@@ -2204,22 +2285,35 @@ def column_sync():
 
 @app.route('/download/<filename>')
 def download_file(filename):
-    """Download processed files."""
+    """Download processed files from user-specific directories."""
     try:
-        # Look for the file in uploads folder first
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        # Get user session and directories
+        user_id = get_user_id()
+        user_config = get_user_config(user_id)
+        
+        # Look for the file in user's uploads folder first
+        file_path = os.path.join(user_config['UPLOAD_FOLDER'], filename)
         if os.path.exists(file_path):
+            logger.info(f"📥 File download: {filename} from uploads (User: {user_id})")
             return send_file(file_path, as_attachment=True, download_name=filename)
 
-        # Also check results folder
-        file_path = os.path.join(app.config['RESULTS_FOLDER'], filename)
+        # Also check user's results folder
+        file_path = os.path.join(user_config['RESULTS_FOLDER'], filename)
         if os.path.exists(file_path):
+            logger.info(f"📥 File download: {filename} from results (User: {user_id})")
             return send_file(file_path, as_attachment=True, download_name=filename)
 
+        # Check user's temp folder as fallback
+        file_path = os.path.join(user_config['TEMP_FOLDER'], filename)
+        if os.path.exists(file_path):
+            logger.info(f"📥 File download: {filename} from temp (User: {user_id})")
+            return send_file(file_path, as_attachment=True, download_name=filename)
+
+        logger.warning(f"❌ File not found: {filename} (User: {user_id})")
         return jsonify({'error': 'File not found'}), 404
 
     except Exception as e:
-        logger.error(f"Error downloading file: {str(e)}")
+        logger.error(f"❌ Error downloading file: {str(e)} (User: {get_user_id()})")
         return jsonify({'error': f'Download failed: {str(e)}'}), 500
 
 @app.errorhandler(413)
@@ -2230,6 +2324,33 @@ def too_large(e):
 def internal_error(e):
     logger.error(f"Internal server error: {str(e)}")
     return jsonify({'error': 'Internal server error occurred'}), 500
+
+@app.route('/user-info')
+def user_info():
+    """Get current user session information"""
+    try:
+        user_id = get_user_id()
+        user_dirs = get_user_directories(user_id)
+        
+        # Count files in each directory
+        upload_files = len([f for f in os.listdir(user_dirs['upload']) if os.path.isfile(os.path.join(user_dirs['upload'], f))])
+        result_files = len([f for f in os.listdir(user_dirs['results']) if os.path.isfile(os.path.join(user_dirs['results'], f))])
+        temp_files = len([f for f in os.listdir(user_dirs['temp']) if os.path.isfile(os.path.join(user_dirs['temp'], f))])
+        
+        return jsonify({
+            'user_id': user_id,
+            'session_active': True,
+            'directories': user_dirs,
+            'file_counts': {
+                'uploads': upload_files,
+                'results': result_files,
+                'temp': temp_files
+            },
+            'session_time': session.get('_created_time', 'N/A')
+        })
+    except Exception as e:
+        logger.error(f"❌ Error getting user info: {str(e)}")
+        return jsonify({'error': f'Failed to get user info: {str(e)}'}), 500
 
 @app.route('/fetch_data', methods=['POST'])
 def fetch_data():
@@ -2431,15 +2552,71 @@ def cleanup_files():
 
 @app.route('/recent_files', methods=['GET'])
 def get_recent_files():
-    """Get recent processed files for both tabs"""
+    """Get recent processed files for current user session"""
     try:
-        recent_files = file_cleanup.get_last_processed_files()
-
+        user_id = get_user_id()
+        user_config = get_user_config(user_id)
+        
+        # Get user-specific recent files by scanning user directories
+        import glob
+        
+        # Look for files in user's results directory
+        phone_pattern = os.path.join(user_config['RESULTS_FOLDER'], "*phone*.csv")
+        address_pattern = os.path.join(user_config['RESULTS_FOLDER'], "*address*.csv")
+        merged_pattern = os.path.join(user_config['RESULTS_FOLDER'], "*merged*.csv")
+        
+        phone_files = glob.glob(phone_pattern)
+        address_files = glob.glob(address_pattern) 
+        merged_files = glob.glob(merged_pattern)
+        
+        # Sort by modification time (newest first)
+        phone_files.sort(key=os.path.getmtime, reverse=True)
+        address_files.sort(key=os.path.getmtime, reverse=True)
+        merged_files.sort(key=os.path.getmtime, reverse=True)
+        
+        # Get file objects with metadata for display
+        def get_file_info_list(file_paths):
+            """Convert file paths to file info objects with metadata"""
+            file_info_list = []
+            for file_path in file_paths:
+                try:
+                    stat = os.stat(file_path)
+                    filename = os.path.basename(file_path)
+                    
+                    # Calculate age in hours
+                    age_seconds = time.time() - stat.st_mtime
+                    age_hours = age_seconds / 3600
+                    
+                    file_info = {
+                        'name': filename,
+                        'size': stat.st_size,
+                        'modified': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(stat.st_mtime)),
+                        'age_hours': age_hours,
+                        'download_url': url_for('download_file', filename=filename)
+                    }
+                    file_info_list.append(file_info)
+                except (OSError, IOError) as e:
+                    logger.warning(f"Could not get info for file {file_path}: {e}")
+                    continue
+            return file_info_list
+        
+        # Convert to file info objects with metadata
+        phone_file_info = get_file_info_list(phone_files[:10])
+        address_file_info = get_file_info_list(address_files[:10]) 
+        merged_file_info = get_file_info_list(merged_files[:10])
+        
+        logger.info(f"📁 Recent files filter: {len(phone_file_info)} phone files, {len(address_file_info)} address files")
+        logger.info(f"📱 Phone files: {[f['name'] for f in phone_file_info]}")
+        logger.info(f"🏠 Address files: {[f['name'] for f in address_file_info]}")
+        
         return jsonify({
-            'phone_files': recent_files['phone'],
-            'address_files': recent_files['address'],
-            'total_phone': len(recent_files['phone']),
-            'total_address': len(recent_files['address'])
+            'phone_files': phone_file_info,
+            'address_files': address_file_info,
+            'merged_files': merged_file_info,
+            'total_phone': len(phone_file_info),
+            'total_address': len(address_file_info),
+            'total_merged': len(merged_file_info),
+            'user_id': user_id  # For debugging
         })
     except Exception as e:
         logger.error(f"Error getting recent files: {str(e)}")
@@ -2500,10 +2677,14 @@ def get_system_info():
 def verify_file_data(filename):
     """Verify that the file actually contains the phone data - helps with frontend display issues."""
     try:
-        # Look for the file in results folder first, then uploads
-        file_path = os.path.join(app.config['RESULTS_FOLDER'], filename)
+        # Get user session for user-specific directories
+        user_id = get_user_id()
+        user_config = get_user_config(user_id)
+        
+        # Look for the file in user's results folder first, then uploads
+        file_path = os.path.join(user_config['RESULTS_FOLDER'], filename)
         if not os.path.exists(file_path):
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file_path = os.path.join(user_config['UPLOAD_FOLDER'], filename)
 
         if not os.path.exists(file_path):
             return jsonify({'error': 'File not found'}), 404

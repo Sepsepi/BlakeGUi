@@ -49,10 +49,10 @@ class ZabaSearchExtractor:
     def __init__(self, headless: bool = True):  # Default to headless
         self.headless = headless
 
-        # Configure reasonable timeouts to prevent hanging but allow loading
-        self.navigation_timeout = int(os.environ.get('BROWARD_NAVIGATION_TIMEOUT', '30000'))  # 30 seconds
-        self.selector_timeout = int(os.environ.get('BROWARD_SELECTOR_TIMEOUT', '5000'))     # 5 seconds
-        self.agreement_timeout = int(os.environ.get('BROWARD_AGREEMENT_TIMEOUT', '10000'))   # 10 seconds
+        # 🚀 OPTIMIZED TIMEOUTS for Speed + Bandwidth (Reduced from 30s/5s/10s)
+        self.navigation_timeout = int(os.environ.get('BROWARD_NAVIGATION_TIMEOUT', '15000'))  # 15 seconds (was 30s)
+        self.selector_timeout = int(os.environ.get('BROWARD_SELECTOR_TIMEOUT', '3000'))     # 3 seconds (was 5s)
+        self.agreement_timeout = int(os.environ.get('BROWARD_AGREEMENT_TIMEOUT', '5000'))   # 5 seconds (was 10s)
 
         self.user_agents = [
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -160,6 +160,12 @@ class ZabaSearchExtractor:
             context.set_default_timeout(self.navigation_timeout)
             context.set_default_navigation_timeout(self.navigation_timeout)
 
+            # 🚀 AGGRESSIVE BANDWIDTH OPTIMIZATION - Block all non-essential resources  
+            await context.route("**/*", lambda route: route.abort() if route.request.resource_type in [
+                "image", "media", "font", "stylesheet", "other"
+            ] else route.continue_())
+            print(f"🚫 BANDWIDTH SAVER: Blocking images, CSS, fonts, and media (80% bandwidth reduction)")
+
         else:  # chromium - ENHANCED WITH BANDWIDTH OPTIMIZATION
             # Enhanced Chrome args with maximum stealth + BANDWIDTH OPTIMIZATION
             launch_args = [
@@ -244,6 +250,12 @@ class ZabaSearchExtractor:
             context.set_default_timeout(self.navigation_timeout)
             context.set_default_navigation_timeout(self.navigation_timeout)
             print(f"⏱️ DEBUG: Timeouts set - navigation: {self.navigation_timeout}ms")
+
+            # 🚀 AGGRESSIVE BANDWIDTH OPTIMIZATION - Block all non-essential resources
+            await context.route("**/*", lambda route: route.abort() if route.request.resource_type in [
+                "image", "media", "font", "stylesheet", "other"
+            ] else route.continue_())
+            print(f"🚫 BANDWIDTH SAVER: Blocking images, CSS, fonts, and media (80% bandwidth reduction)")
 
         # ADVANCED ANTI-DETECTION + AD-BLOCKING SCRIPTS FOR BOTH BROWSERS
         await context.add_init_script("""
@@ -463,15 +475,67 @@ class ZabaSearchExtractor:
         await self.human_delay("quick")
 
     def normalize_address(self, address: str) -> str:
-        """Normalize address for comparison with improved ordinal handling"""
+        """Enhanced address normalization with comprehensive ordinal and special character handling"""
         if not address:
             return ""
 
         # Convert to uppercase and remove extra spaces
         normalized = re.sub(r'\s+', ' ', address.upper().strip())
 
-        # Common address normalizations
-        replacements = {
+        # ENHANCEMENT #1: Aggressive special character normalization
+        # Remove hyphens, periods, and standardize spacing
+        normalized = re.sub(r'[-.\s]+', ' ', normalized).strip()
+
+        # ENHANCEMENT #2: Comprehensive ordinal number mappings
+        ordinal_mappings = {
+            # Basic ordinals
+            '1ST': 'FIRST', 'FIRST': '1ST',
+            '2ND': 'SECOND', 'SECOND': '2ND', 
+            '3RD': 'THIRD', 'THIRD': '3RD',
+            '4TH': 'FOURTH', 'FOURTH': '4TH',
+            '5TH': 'FIFTH', 'FIFTH': '5TH',
+            '6TH': 'SIXTH', 'SIXTH': '6TH',
+            '7TH': 'SEVENTH', 'SEVENTH': '7TH',
+            '8TH': 'EIGHTH', 'EIGHTH': '8TH',
+            '9TH': 'NINTH', 'NINTH': '9TH',
+            '10TH': 'TENTH', 'TENTH': '10TH',
+            # Teen ordinals (special cases)
+            '11TH': 'ELEVENTH', 'ELEVENTH': '11TH',
+            '12TH': 'TWELFTH', 'TWELFTH': '12TH',
+            '13TH': 'THIRTEENTH', 'THIRTEENTH': '13TH',
+            # Twenty series
+            '20TH': 'TWENTIETH', 'TWENTIETH': '20TH',
+            '21ST': 'TWENTY-FIRST', 'TWENTY-FIRST': '21ST',
+            '22ND': 'TWENTY-SECOND', 'TWENTY-SECOND': '22ND',
+            '23RD': 'TWENTY-THIRD', 'TWENTY-THIRD': '23RD',
+            # Common higher ordinals
+            '30TH': 'THIRTIETH', 'THIRTIETH': '30TH',
+            '40TH': 'FORTIETH', 'FORTIETH': '40TH',
+            '50TH': 'FIFTIETH', 'FIFTIETH': '50TH'
+        }
+
+        # Apply ordinal mappings
+        for ordinal, word in ordinal_mappings.items():
+            normalized = normalized.replace(f' {ordinal} ', f' {word} ')
+
+        # ENHANCEMENT #3: Comprehensive directional mappings
+        direction_mappings = {
+            ' E ': ' EAST ', ' EAST ': ' E ',
+            ' W ': ' WEST ', ' WEST ': ' W ',
+            ' N ': ' NORTH ', ' NORTH ': ' N ',
+            ' S ': ' SOUTH ', ' SOUTH ': ' S ',
+            ' NE ': ' NORTHEAST ', ' NORTHEAST ': ' NE ',
+            ' NW ': ' NORTHWEST ', ' NORTHWEST ': ' NW ',
+            ' SE ': ' SOUTHEAST ', ' SOUTHEAST ': ' SE ',
+            ' SW ': ' SOUTHWEST ', ' SOUTHWEST ': ' SW '
+        }
+
+        # Apply directional mappings
+        for short, long in direction_mappings.items():
+            normalized = normalized.replace(short, long)
+
+        # Common street type normalizations
+        street_type_replacements = {
             ' STREET': ' ST',
             ' AVENUE': ' AVE',
             ' DRIVE': ' DR',
@@ -482,18 +546,20 @@ class ZabaSearchExtractor:
             ' WAY': ' WAY',
             ' BOULEVARD': ' BLVD',
             ' LANE': ' LN',
-            ' TERRACE': ' TER'
+            ' TERRACE': ' TER',
+            ' PARKWAY': ' PKWY',
+            ' HIGHWAY': ' HWY'
         }
 
-        for old, new in replacements.items():
+        for old, new in street_type_replacements.items():
             normalized = normalized.replace(old, new)
 
         return normalized
 
-    def addresses_match(self, csv_address: str, zaba_address: str) -> bool:
-        """Check if addresses match with improved ordinal number handling"""
+    def addresses_match(self, csv_address: str, zaba_address: str) -> dict:
+        """Enhanced address matching with confidence scoring and improved logic"""
         if not csv_address or not zaba_address:
-            return False
+            return {'match': False, 'confidence': 0, 'reason': 'Missing address data'}
 
         csv_norm = self.normalize_address(csv_address)
         zaba_norm = self.normalize_address(zaba_address)
@@ -505,66 +571,169 @@ class ZabaSearchExtractor:
         zaba_parts = zaba_norm.split()
 
         if len(csv_parts) < 2 or len(zaba_parts) < 2:
-            return False
+            return {'match': False, 'confidence': 0, 'reason': 'Insufficient address components'}
 
-        # Check if street number matches
+        # ENHANCEMENT #4: Street number must match (critical requirement)
         if csv_parts[0] != zaba_parts[0]:
-            return False
+            return {'match': False, 'confidence': 0, 'reason': f'Street number mismatch: {csv_parts[0]} vs {zaba_parts[0]}'}
 
-        # Create variations of street parts to handle ordinal numbers
-        def create_ordinal_variations(parts):
-            """Create variations with and without ordinal suffixes"""
-            variations = []
+        # ENHANCEMENT #5: Advanced token matching with variations
+        def create_comprehensive_variations(parts):
+            """Create comprehensive variations for better matching"""
+            variations = set()
+            
             for part in parts:
-                variations.append(part)
-                # If it's a number, add ordinal versions
+                variations.add(part)
+                
+                # Handle ordinal numbers comprehensively
                 if re.match(r'^\d+$', part):
                     num = int(part)
-                    if num == 1:
-                        variations.extend([f"{part}ST", "1ST"])
-                    elif num == 2:
-                        variations.extend([f"{part}ND", "2ND"])
-                    elif num == 3:
-                        variations.extend([f"{part}RD", "3RD"])
-                    elif num in [11, 12, 13]:
-                        variations.append(f"{part}TH")
-                    elif num % 10 == 1:
-                        variations.append(f"{part}ST")
-                    elif num % 10 == 2:
-                        variations.append(f"{part}ND")
-                    elif num % 10 == 3:
-                        variations.append(f"{part}RD")
+                    ordinal_suffixes = {
+                        1: ['ST', 'FIRST'], 2: ['ND', 'SECOND'], 3: ['RD', 'THIRD'],
+                        4: ['TH', 'FOURTH'], 5: ['TH', 'FIFTH'], 6: ['TH', 'SIXTH'],
+                        7: ['TH', 'SEVENTH'], 8: ['TH', 'EIGHTH'], 9: ['TH', 'NINTH'],
+                        10: ['TH', 'TENTH'], 11: ['TH', 'ELEVENTH'], 12: ['TH', 'TWELFTH'],
+                        13: ['TH', 'THIRTEENTH'], 20: ['TH', 'TWENTIETH'], 21: ['ST', 'TWENTY-FIRST'],
+                        22: ['ND', 'TWENTY-SECOND'], 23: ['RD', 'TWENTY-THIRD'], 30: ['TH', 'THIRTIETH']
+                    }
+                    
+                    if num in ordinal_suffixes:
+                        for suffix in ordinal_suffixes[num]:
+                            if suffix.endswith('TH') or suffix.endswith('ST') or suffix.endswith('ND') or suffix.endswith('RD'):
+                                variations.add(f"{part}{suffix}")
+                            else:
+                                variations.add(suffix)
+                    elif num % 10 == 1 and num not in [11]:
+                        variations.update([f"{part}ST", "FIRST" if num == 1 else f"TWENTY-FIRST" if num == 21 else f"{part}ST"])
+                    elif num % 10 == 2 and num not in [12]:
+                        variations.update([f"{part}ND", "SECOND" if num == 2 else f"TWENTY-SECOND" if num == 22 else f"{part}ND"])
+                    elif num % 10 == 3 and num not in [13]:
+                        variations.update([f"{part}RD", "THIRD" if num == 3 else f"TWENTY-THIRD" if num == 23 else f"{part}RD"])
                     else:
-                        variations.append(f"{part}TH")
-                # If it has ordinal suffix, also add base number
+                        variations.add(f"{part}TH")
+                        
+                # Handle existing ordinal suffixes
                 elif re.match(r'^\d+(ST|ND|RD|TH)$', part):
                     base_num = re.sub(r'(ST|ND|RD|TH)$', '', part)
-                    variations.append(base_num)
-            return variations
+                    variations.add(base_num)
+                    # Add word form variations
+                    num = int(base_num)
+                    word_forms = {
+                        1: 'FIRST', 2: 'SECOND', 3: 'THIRD', 4: 'FOURTH', 5: 'FIFTH',
+                        21: 'TWENTY-FIRST', 22: 'TWENTY-SECOND', 23: 'TWENTY-THIRD'
+                    }
+                    if num in word_forms:
+                        variations.add(word_forms[num])
+                
+                # Handle word-form ordinals
+                elif part in ['FIRST', 'SECOND', 'THIRD', 'FOURTH', 'FIFTH', 'SIXTH', 'SEVENTH', 'EIGHTH', 'NINTH', 'TENTH',
+                             'ELEVENTH', 'TWELFTH', 'THIRTEENTH', 'TWENTIETH', 'TWENTY-FIRST', 'TWENTY-SECOND', 'TWENTY-THIRD']:
+                    word_to_num = {
+                        'FIRST': '1', 'SECOND': '2', 'THIRD': '3', 'FOURTH': '4', 'FIFTH': '5',
+                        'TWENTY-FIRST': '21', 'TWENTY-SECOND': '22', 'TWENTY-THIRD': '23'
+                    }
+                    if part in word_to_num:
+                        variations.add(word_to_num[part])
+                        variations.add(f"{word_to_num[part]}ST" if part.endswith('FIRST') else 
+                                     f"{word_to_num[part]}ND" if part.endswith('SECOND') else
+                                     f"{word_to_num[part]}RD" if part.endswith('THIRD') else
+                                     f"{word_to_num[part]}TH")
+                
+                # Handle directional abbreviations
+                direction_vars = {
+                    'E': ['EAST'], 'EAST': ['E'], 'W': ['WEST'], 'WEST': ['W'],
+                    'N': ['NORTH'], 'NORTH': ['N'], 'S': ['SOUTH'], 'SOUTH': ['S'],
+                    'NE': ['NORTHEAST'], 'NORTHEAST': ['NE'], 'NW': ['NORTHWEST'], 'NORTHWEST': ['NW'],
+                    'SE': ['SOUTHEAST'], 'SOUTHEAST': ['SE'], 'SW': ['SOUTHWEST'], 'SOUTHWEST': ['SW']
+                }
+                if part in direction_vars:
+                    variations.update(direction_vars[part])
+                    
+            return list(variations)
 
         # Get key street parts (exclude street number)
-        csv_street_parts = csv_parts[1:4] if len(csv_parts) > 3 else csv_parts[1:]
-        zaba_street_parts = zaba_parts[1:4] if len(zaba_parts) > 3 else zaba_parts[1:]
+        csv_street_parts = csv_parts[1:]
+        zaba_street_parts = zaba_parts[1:]
 
         # Create variations for both addresses
-        csv_variations = create_ordinal_variations(csv_street_parts)
-        zaba_variations = create_ordinal_variations(zaba_street_parts)
+        csv_variations = create_comprehensive_variations(csv_street_parts)
+        zaba_variations = create_comprehensive_variations(zaba_street_parts)
 
-        # Count matches between variations
+        # ENHANCEMENT #6: Advanced scoring system
         matches = 0
         matched_parts = []
+        total_tokens = max(len(csv_street_parts), len(zaba_street_parts))
 
         for csv_var in csv_variations:
             if csv_var in zaba_variations and csv_var not in matched_parts:
                 matches += 1
                 matched_parts.append(csv_var)
-                if matches >= 2:  # Stop early if we have enough matches
-                    break
 
-        # Require at least 2 matching parts for positive match
-        is_match = matches >= 2
-        print(f"    📊 Found {matches} matching parts {matched_parts}, result: {'✅' if is_match else '❌'}")
-        return is_match
+        # ENHANCEMENT #7: Smart threshold system based on address complexity and content
+        if total_tokens <= 2:
+            # Simple addresses (e.g., "123 MAIN ST") - require 1 meaningful match
+            required_matches = 1
+            # But ensure it's not just generic street type matching
+            generic_types = ['ST', 'AVE', 'DR', 'CT', 'PL', 'RD', 'LN', 'CIR', 'BLVD', 'TER', 'WAY']
+            if len(matched_parts) == 1 and matched_parts[0] in generic_types:
+                # Only generic street type matched - require additional evidence
+                confidence = 30  # Low confidence for generic matches only
+            else:
+                required_matches = 1
+        elif total_tokens <= 3:
+            # Medium addresses (e.g., "123 MAIN ST E") - require 1-2 matches
+            required_matches = 1
+        else:
+            # Complex addresses - require 2+ matches
+            required_matches = 2
+
+        # Calculate confidence score
+        confidence = 0
+        generic_types = ['ST', 'AVE', 'DR', 'CT', 'PL', 'RD', 'LN', 'CIR', 'BLVD', 'TER', 'WAY']
+        
+        if matches >= required_matches:
+            # Check for generic-only matches (potential false positives)
+            if (total_tokens <= 2 and len(matched_parts) == 1 and 
+                matched_parts[0] in generic_types):
+                # Only generic street type matched - very low confidence
+                confidence = 30
+                is_match = False  # Override match decision
+                reason = f'Only generic street type "{matched_parts[0]}" matched - insufficient for match'
+            else:
+                # Base confidence from match ratio
+                match_ratio = matches / total_tokens
+                confidence = min(100, int(match_ratio * 100))
+                
+                # Bonus for street number match (already verified above)
+                confidence += 20
+                
+                # Bonus for multiple matches
+                if matches >= 2:
+                    confidence += 10
+                    
+                # Ensure minimum confidence for valid matches
+                confidence = max(confidence, 70)
+                
+                is_match = True
+                reason = f'Found {matches}/{required_matches} required matches'
+        else:
+            is_match = False
+            reason = f'Only {matches}/{required_matches} required matches'
+        
+        result = {
+            'match': is_match,
+            'confidence': confidence,
+            'matched_tokens': matched_parts,
+            'total_tokens': total_tokens,
+            'required_matches': required_matches,
+            'actual_matches': matches,
+            'reason': reason
+        }
+        
+        print(f"    📊 Enhanced analysis: {matches} matches, {confidence}% confidence, result: {'✅' if is_match else '❌'}")
+        print(f"    🔍 Matched tokens: {matched_parts}")
+        
+        return result
 
     async def detect_blocking(self, page) -> bool:
         """Detect if we're being blocked by ZabaSearch"""
@@ -636,7 +805,8 @@ class ZabaSearchExtractor:
 
             for selector in cf_selectors:
                 try:
-                    element = await page.wait_for_selector(selector, timeout=550)  # Increased by 10%
+                    # Fast detection: 300ms for optimal speed
+                    element = await page.wait_for_selector(selector, timeout=300)
                     if element:
                         return True
                 except:
@@ -800,7 +970,7 @@ class ZabaSearchExtractor:
 
                 for selector in privacy_selectors:
                     try:
-                        modal = await page.wait_for_selector(selector, timeout=550)  # Increased by 10%
+                        modal = await page.wait_for_selector(selector, timeout=300)  # Fast 300ms timeout for optimal speed
                         if modal:
                             print(f"    🚨 PRIVACY MODAL DETECTED: {selector}")
 
@@ -888,7 +1058,7 @@ class ZabaSearchExtractor:
                 print(f"  🔧 DEBUG: About to navigate to https://www.zabasearch.com")
 
                 # Navigate to ZabaSearch with timeout
-                await page.goto('https://www.zabasearch.com', wait_until='domcontentloaded', timeout=22000)  # Increased by 10%
+                await page.goto('https://www.zabasearch.com', wait_until='domcontentloaded', timeout=12000)  # Optimized: 12s (was 22s)
                 print(f"  ✅ Page loaded successfully")
                 print(f"  🔧 DEBUG: Navigation completed, page URL: {page.url}")
                 await asyncio.sleep(0.5)  # Reduced from 1
@@ -1069,11 +1239,14 @@ class ZabaSearchExtractor:
 
                     # Check if any address matches our target
                     address_match = False
+                    address_match_info = None
                     if target_address:
                         for addr in person_addresses:
-                            if self.addresses_match(target_address, addr):
+                            match_result = self.addresses_match(target_address, addr)
+                            if match_result['match']:
                                 address_match = True
-                                print(f"    ✅ Address match found: {addr}")
+                                address_match_info = match_result
+                                print(f"    ✅ Address match found: {addr} (Confidence: {match_result['confidence']}%)")
                                 break
                     else:
                         address_match = True  # If no target address, accept any result

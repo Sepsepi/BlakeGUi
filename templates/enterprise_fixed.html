@@ -29,6 +29,7 @@
             text-align: center;
             margin-bottom: 40px;
             color: white;
+            position: relative;
         }
 
         .header h1 {
@@ -40,6 +41,46 @@
         .header p {
             font-size: 1.1rem;
             opacity: 0.9;
+        }
+
+        /* User Session Info */
+        .session-info {
+            position: absolute;
+            top: 0;
+            right: 0;
+            background: rgba(255,255,255,0.1);
+            padding: 10px 15px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            user-select: none;
+        }
+
+        .session-info:hover {
+            background: rgba(255,255,255,0.15);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .session-info:active {
+            transform: translateY(0px);
+            background: rgba(255,255,255,0.2);
+        }
+
+        .session-info .user-id {
+            color: #FFD700;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            word-break: break-all;
+        }
+
+        .session-info .toggle-hint {
+            font-size: 0.7rem;
+            color: rgba(255,255,255,0.7);
+            margin-left: 5px;
         }
 
         /* Tab Navigation */
@@ -758,6 +799,10 @@
 
     <div class="container">
         <div class="header">
+            <div class="session-info" id="sessionInfo" onclick="toggleSessionId()">
+                <i class="fas fa-user"></i> Session: <span class="user-id">Loading...</span>
+                <span class="toggle-hint">(click to expand)</span>
+            </div>
             <h1><i class="fas fa-chart-line"></i> tool</h1>
             <p>Professional Lead Generation & Data Enhancement Platform</p>
         </div>
@@ -2510,8 +2555,11 @@
             }
         }
 
-        // Load recent files when page loads
+        // Load session info and recent files when page loads
         document.addEventListener('DOMContentLoaded', function() {
+            // Load user session info
+            loadSessionInfo();
+            
             // File Upload Handlers
             document.getElementById('phoneFileInput').addEventListener('change', function(e) {
                 handleFileUpload(e.target.files[0], 'phone');
@@ -2528,6 +2576,58 @@
             // Load recent files for the initially active tab (phone extraction)
             loadInlineRecentFiles('phone');
         });
+
+        // Load user session information
+        let fullSessionId = '';
+        let isSessionExpanded = false;
+
+        async function loadSessionInfo() {
+            try {
+                const response = await fetch('/user-info');
+                if (response.ok) {
+                    const userInfo = await response.json();
+                    const sessionElement = document.getElementById('sessionInfo');
+                    const userIdSpan = sessionElement.querySelector('.user-id');
+                    
+                    // Store the full session ID
+                    fullSessionId = userInfo.user_id;
+                    
+                    // Display truncated version initially
+                    userIdSpan.textContent = userInfo.user_id.substring(0, 8) + '...';
+                    userIdSpan.title = `Full Session ID: ${userInfo.user_id}\nFiles: ${userInfo.file_counts.uploads} uploads, ${userInfo.file_counts.results} results\nClick to toggle view`;
+                } else {
+                    console.warn('Failed to load session info');
+                }
+            } catch (error) {
+                console.error('Error loading session info:', error);
+            }
+        }
+
+        // Toggle session ID display between truncated and full
+        function toggleSessionId() {
+            if (!fullSessionId) return;
+            
+            const userIdSpan = document.querySelector('.user-id');
+            const toggleHint = document.querySelector('.toggle-hint');
+            
+            if (isSessionExpanded) {
+                // Show truncated version
+                userIdSpan.textContent = fullSessionId.substring(0, 8) + '...';
+                toggleHint.textContent = '(click to expand)';
+                isSessionExpanded = false;
+            } else {
+                // Show full version
+                userIdSpan.textContent = fullSessionId;
+                toggleHint.textContent = '(click to collapse)';
+                isSessionExpanded = true;
+            }
+            
+            // Add a subtle flash effect to indicate the change
+            userIdSpan.style.transform = 'scale(1.05)';
+            setTimeout(() => {
+                userIdSpan.style.transform = 'scale(1)';
+            }, 150);
+        }
 
         // SYSTEM NOTIFICATION SOUNDS
         function playSystemNotification(type) {

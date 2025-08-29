@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 """
 Phone Search Pipeline - Enhanced ZabaSearch Automation
-Direct processing with improved error handling and robust data processing
+Direct processing with improved error handling and robust                             # 🚀 SIMPLIFIED BATCH SIZING for optimal resource management
+                            if records_needing_processing < 100:
+                                batch_count = 4  # Small files: 4 batches
+                                self.logger.info("📊 Using 4 batches for small file (<100 records)")
+                            else:
+                                batch_count = 10  # Large files: 10 batches
+                                self.logger.info("📊 Using 10 batches for large file (100+ records)")ssing
 
 Features:
 - Direct CSV processing without job queuing
@@ -81,16 +87,26 @@ logging.basicConfig(
 class PhoneSearchPipeline:
     """Enhanced phone search pipeline with direct processing"""
 
-    def __init__(self):
+    def __init__(self, user_config: Optional[dict] = None):
         self.logger = logging.getLogger(__name__)
         self.ai_formatter = IntelligentPhoneFormatter() if AI_FORMATTER_AVAILABLE else None
+        
+        # Set up paths - use user-specific if provided, otherwise defaults
+        if user_config:
+            self.results_folder = user_config.get('RESULTS_FOLDER', 'results')
+            self.temp_folder = user_config.get('TEMP_FOLDER', 'temp')
+            self.logs_folder = user_config.get('LOGS_FOLDER', 'logs')
+        else:
+            self.results_folder = 'results'
+            self.temp_folder = 'temp'
+            self.logs_folder = 'logs'
 
         # Ensure directories exist
-        os.makedirs('results', exist_ok=True)
-        os.makedirs('temp', exist_ok=True)
-        os.makedirs('logs', exist_ok=True)
+        os.makedirs(self.results_folder, exist_ok=True)
+        os.makedirs(self.temp_folder, exist_ok=True)
+        os.makedirs(self.logs_folder, exist_ok=True)
 
-        self.logger.info("Phone Search Pipeline initialized")
+        self.logger.info(f"Phone Search Pipeline initialized with results: {self.results_folder}, temp: {self.temp_folder}")
 
     def process_csv_direct(self, csv_path: str, output_path: str, max_records: Optional[int] = None) -> bool:
         """
@@ -130,8 +146,20 @@ class PhoneSearchPipeline:
 
                         if records_needing_processing > 100:
                             self.logger.info(f"🔄 Large dataset detected: {records_needing_processing} records need processing")
-                            self.logger.info("🚀 Initiating multi-terminal batch processing...")
-                            return self._process_in_batches(formatted_path, output_path, records_needing_processing)
+                            
+                            # 🚀 SMART BATCH SIZING for bandwidth optimization
+                            if records_needing_processing < 200:
+                                batch_count = 4  # Small files: 4 batches
+                                self.logger.info("📊 Using 4 batches for small file (bandwidth optimized)")
+                            elif records_needing_processing < 500:
+                                batch_count = 6  # Medium files: 6 batches  
+                                self.logger.info("� Using 6 batches for medium file (balanced performance)")
+                            else:
+                                batch_count = 10  # Large files: 10 batches
+                                self.logger.info("📊 Using 10 batches for large file (maximum parallel processing)")
+                            
+                            self.logger.info("�🚀 Initiating multi-terminal batch processing...")
+                            return self._process_in_batches(formatted_path, output_path, records_needing_processing, csv_path, batch_count)
                         else:
                             self.logger.info(f"📊 Standard processing: {records_needing_processing} records")
                             # Continue with normal processing
@@ -177,7 +205,7 @@ class PhoneSearchPipeline:
             self.logger.error(f"❌ Pipeline processing failed: {e}")
             return False
 
-    def _process_in_batches(self, formatted_path: str, output_path: str, total_records: int) -> bool:
+    def _process_in_batches(self, formatted_path: str, output_path: str, total_records: int, original_csv_path: str, batch_count: int = 10) -> bool:
         """
         Process large files in batches using multiple terminals
 
@@ -185,6 +213,7 @@ class PhoneSearchPipeline:
             formatted_path: Path to the formatted CSV file
             output_path: Final output path
             total_records: Total number of records needing processing
+            original_csv_path: Path to the original input CSV file
 
         Returns:
             bool: True if batch processing completed successfully
@@ -206,13 +235,13 @@ class PhoneSearchPipeline:
             self.logger.info(f"📞 Records that need phone extraction: {records_needing_processing}")
             self.logger.info(f"⏭️  Records to skip (already have phones): {len(df) - records_needing_processing}")
 
-            # Split ALL records (including skipped ones) into 4 batches to preserve indexing
-            batch_size = len(df) // 4
+            # Split ALL records (including skipped ones) into dynamic batches to preserve indexing
+            batch_size = len(df) // batch_count
             batches = []
 
-            for i in range(4):
+            for i in range(batch_count):
                 start_idx = i * batch_size
-                if i == 3:  # Last batch gets remainder
+                if i == batch_count - 1:  # Last batch gets remainder
                     end_idx = len(df)
                 else:
                     end_idx = (i + 1) * batch_size
@@ -229,14 +258,14 @@ class PhoneSearchPipeline:
 
             for i, batch_df in enumerate(batches):
                 batch_filename = f"batch_{i+1}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-                batch_path = os.path.join('temp', batch_filename)
+                batch_path = os.path.join(self.temp_folder, batch_filename)
 
                 # Save batch file
                 batch_df.to_csv(batch_path, index=False)
                 batch_files.append(batch_path)
 
-                # Create output path for this batch
-                batch_output = os.path.join('results', f"phone_results_batch_{i+1}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+                # Create output path for this batch using user-specific results folder
+                batch_output = os.path.join(self.results_folder, f"phone_results_batch_{i+1}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
                 batch_outputs.append(batch_output)
 
             # Run batches using headless processing (import zabasearch module directly)
@@ -248,10 +277,30 @@ class PhoneSearchPipeline:
             combined_df = pd.DataFrame()
             successful_batches = 0
 
-            for i, batch_output in enumerate(batch_outputs):
+            for i, (batch_file, batch_output) in enumerate(zip(batch_files, batch_outputs)):
+                # Try to read from output file first, then from batch file (processed in-place)
+                result_file = None
                 if os.path.exists(batch_output):
+                    result_file = batch_output
+                    self.logger.info(f"   📂 Batch {i+1}: Using output file {batch_output}")
+                elif os.path.exists(batch_file):
+                    result_file = batch_file
+                    self.logger.info(f"   📂 Batch {i+1}: Using processed batch file {batch_file}")
+                else:
+                    # FALLBACK: Look for backup files in temp folder for interrupted processing
+                    batch_name = os.path.basename(batch_file).replace('.csv', '')
+                    temp_pattern = os.path.join(self.temp_folder, f"{batch_name}_backup_after_*.csv")
+                    import glob
+                    backup_files = glob.glob(temp_pattern)
+                    if backup_files:
+                        # Use the latest backup file
+                        latest_backup = max(backup_files, key=os.path.getmtime)
+                        result_file = latest_backup
+                        self.logger.info(f"   🔄 Batch {i+1}: Using backup file {latest_backup}")
+                
+                if result_file:
                     try:
-                        batch_result = pd.read_csv(batch_output)
+                        batch_result = pd.read_csv(result_file)
                         if len(batch_result) > 0:  # Only combine if batch has data
                             combined_df = pd.concat([combined_df, batch_result], ignore_index=True)
                             successful_batches += 1
@@ -261,14 +310,53 @@ class PhoneSearchPipeline:
                     except Exception as e:
                         self.logger.error(f"   ❌ Failed to read Batch {i+1}: {e}")
                 else:
-                    self.logger.warning(f"   ⚠️ Batch {i+1} output file not found - skipping")
+                    self.logger.warning(f"   ⚠️ Batch {i+1} - no result files found - skipping")
 
             # Save combined results if we have any successful batches
             if len(combined_df) > 0:
-                combined_df.to_csv(output_path, index=False)
                 self.logger.info(f"✅ Combined results from {successful_batches}/{len(batch_outputs)} batches")
                 self.logger.info(f"✅ Total records combined: {len(combined_df)}")
-                self.logger.info(f"✅ Combined results saved to: {output_path}")
+                
+                # AUTO-MERGE: Apply enhanced phone merger for batch results
+                try:
+                    from enhanced_phone_merger import EnhancedPhoneMerger
+                    self.logger.info("🔗 Auto-merging batch phone data with enhanced merger...")
+
+                    # Read original data for merging
+                    original_df = read_data_file(original_csv_path)
+
+                    # Use enhanced merger to merge DataFrames directly
+                    merger = EnhancedPhoneMerger()
+                    merge_result = merger.merge_phone_dataframes(original_df, combined_df)
+
+                    if merge_result and merge_result.get('success'):
+                        self.logger.info(f"✅ Enhanced phone merger applied successfully:")
+                        self.logger.info(f"   📞 Total records with phones: {merge_result.get('total_with_phones', 0)}")
+                        self.logger.info(f"   🆕 New phone numbers found: {merge_result.get('new_phones_added', 0)}")
+                        self.logger.info(f"   📊 Records processed: {merge_result.get('total_records', 0)}")
+
+                        # Save the merged DataFrame
+                        merged_df = merge_result.get('merged_df')
+                        if merged_df is not None:
+                            # Remove DirectName_Phone columns from merged output
+                            columns_to_drop = ['DirectName_Phone_Primary', 'DirectName_Phone_Secondary', 'DirectName_Phone_All']
+                            final_merged_df = merged_df.drop(columns=[col for col in columns_to_drop if col in merged_df.columns])
+                            final_merged_df.to_csv(output_path, index=False)
+                            self.logger.info(f"✅ Enhanced merged results saved to: {output_path}")
+                        else:
+                            # Fallback: Save combined results without enhanced merging
+                            self.logger.warning("⚠️ Enhanced merger returned None, using combined results")
+                            combined_df.to_csv(output_path, index=False)
+                    else:
+                        # Fallback: Save combined results without enhanced merging
+                        self.logger.warning("⚠️ Enhanced merger didn't complete successfully, using combined results")
+                        combined_df.to_csv(output_path, index=False)
+
+                except Exception as merge_error:
+                    self.logger.error(f"❌ Enhanced phone merger failed: {merge_error}")
+                    self.logger.info("📞 Falling back to combined batch results...")
+                    # Fallback: Save combined results without enhanced merging
+                    combined_df.to_csv(output_path, index=False)
 
                 # Cleanup batch files
                 for batch_file in batch_files:
@@ -327,16 +415,13 @@ class PhoneSearchPipeline:
 
                                 async def run_batch():
                                     try:
-                                        # Set a timeout of 3600 seconds (1 hour) per batch for ZabaSearch processing
-                                        await asyncio.wait_for(
-                                            scraper.process_csv_with_sessions(batch_file),
-                                            timeout=3600.0
-                                        )
-                                    except asyncio.TimeoutError:
-                                        self.logger.error(f"   ⏰ Batch {batch_num}: ZabaSearch processing timed out after 1 hour")
+                                        # No timeout - let batches complete naturally (can take 4+ hours for large files)
+                                        await scraper.process_csv_with_sessions(batch_file)
+                                    except Exception as e:
+                                        self.logger.error(f"   ❌ Batch {batch_num}: ZabaSearch processing failed: {e}")
                                         raise
 
-                                # Run the async processing with timeout
+                                # Run the async processing without timeout
                                 try:
                                     asyncio.run(run_batch())
                                 except Exception as e:
@@ -384,10 +469,10 @@ class PhoneSearchPipeline:
                 threads.append(thread)
                 thread.start()
 
-                # Staggered start: 10 second delay between batches to prevent proxy conflicts
+                # Staggered start: 5 second delay between batches to prevent proxy conflicts
                 if i < len(batch_files) - 1:  # Don't delay after the last one
-                    self.logger.info(f"   ⏸️ Waiting 10 seconds before starting batch {i+2} to prevent proxy conflicts...")
-                    time.sleep(10)
+                    self.logger.info(f"   ⏸️ Waiting 5 seconds before starting batch {i+2} to prevent proxy conflicts...")
+                    time.sleep(5)
 
             # Wait for all threads to complete
             self.logger.info("⏳ Waiting for all batches to complete...")
@@ -453,8 +538,8 @@ class PhoneSearchPipeline:
                     self.logger.info("🤖 Running ZabaSearch automation...")
                     scraper = zaba_module.ZabaSearchExtractor(headless=True)
 
-                    # Create a temporary CSV for processing
-                    temp_csv = f"temp/temp_processing_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+                    # Create a temporary CSV for processing using user-specific temp folder
+                    temp_csv = os.path.join(self.temp_folder, f"temp_processing_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
 
                     # 🔧 COLUMN FORMAT FIX: Ensure ZabaSearch format compatibility
                     self.logger.info("🔧 Ensuring ZabaSearch format compatibility...")
@@ -786,24 +871,30 @@ class PhoneSearchPipeline:
             return {'error': str(e)}
 
 # Flask integration functions
-def process_phone_extraction(csv_path: str, max_records: Optional[int] = None):
+def process_phone_extraction(csv_path: str, max_records: Optional[int] = None, user_config: Optional[dict] = None):
     """
     Process phone extraction for Flask integration
 
     Args:
         csv_path: Path to input CSV file
         max_records: Maximum records to process (optional)
+        user_config: User-specific configuration with TEMP_FOLDER, RESULTS_FOLDER paths
 
     Returns:
         str: Path to output file or None if failed
     """
     try:
-        pipeline = PhoneSearchPipeline()
+        pipeline = PhoneSearchPipeline(user_config=user_config)
 
-        # Create output filename
+        # Create output filename with user-specific results folder
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_filename = f"phone_extraction_{timestamp}.csv"
-        output_path = os.path.join('results', output_filename)
+        
+        # Use user-specific results folder if provided
+        if user_config and user_config.get('RESULTS_FOLDER'):
+            output_path = os.path.join(user_config['RESULTS_FOLDER'], output_filename)
+        else:
+            output_path = os.path.join('results', output_filename)
 
         # Process the file
         success = pipeline.process_csv_direct(csv_path, output_path, max_records)
