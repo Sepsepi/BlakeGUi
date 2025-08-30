@@ -820,10 +820,10 @@ def upload_file():
                         processed_df = pd.read_csv(result['output_file'])
                         logger.info(f"✅ Column Syncer complete: {len(processed_df)} records processed (User: {user_id})")
 
-                        # Save with Clean_ prefix + original filename to user's results folder
+                        # Save with Cleaned_ prefix + original filename to user's results folder
                         original_name = os.path.splitext(filename)[0]
                         original_ext = os.path.splitext(filename)[1]
-                        clean_filename = f"Clean_{original_name}{original_ext}"
+                        clean_filename = f"Cleaned_{original_name}{original_ext}"
                         results_path = os.path.join(user_config['RESULTS_FOLDER'], clean_filename)
                         processed_df.to_csv(results_path, index=False)
                         logger.info(f"💾 Column Syncer results saved: {clean_filename} (User: {user_id})")
@@ -2631,7 +2631,9 @@ def get_recent_files():
             os.path.join(user_config['RESULTS_FOLDER'], "merge_*.csv"),            # Merge files
             os.path.join(user_config['RESULTS_FOLDER'], "*merged*.csv"),           # Other merged files
             os.path.join(user_config['RESULTS_FOLDER'], "*_final.csv"),            # Final output files
-            os.path.join(user_config['RESULTS_FOLDER'], "*_complete.csv")          # Complete files
+            os.path.join(user_config['RESULTS_FOLDER'], "*_complete.csv"),         # Complete files
+            os.path.join(user_config['RESULTS_FOLDER'], "Cleaned_*.csv"),          # Validator app outputs
+            os.path.join(user_config['RESULTS_FOLDER'], "Merged_*.csv")            # Phone extractor app outputs
         ]
         
         all_final_files = []

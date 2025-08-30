@@ -503,10 +503,9 @@ class ColumnSyncer:
 
                 stats['total_output_rows'] = len(output_df)
 
-                # Generate output filename with timestamp
+                # Generate output filename with Cleaned_ prefix (no timestamp)
                 input_filename = Path(file_path).stem
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                output_filename = f"Mobile_Formatted_{input_filename}_{timestamp}.csv"
+                output_filename = f"Cleaned_{input_filename}.csv"
                 output_path = Path(output_dir) / output_filename
 
                 # Ensure output directory exists
