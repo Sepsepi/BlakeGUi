@@ -764,183 +764,9 @@ class ZabaSearchExtractor:
         except:
             return False
 
-    async def detect_cloudflare_challenge(self, page) -> bool:
-        """Detect if we're facing a Cloudflare challenge"""
-        try:
-            page_title = await page.title()
-            page_content = await page.content()
-            current_url = page.url
+    # Cloudflare detection removed - not needed for this environment
 
-            # Check URL for cloudflare challenge indicators
-            if 'challenge' in current_url.lower() or 'cloudflare' in current_url.lower():
-                return True
-
-            cloudflare_indicators = [
-                'checking your browser',
-                'please wait',
-                'verify you are human',
-                'cloudflare ray id',
-                'cf-browser-verification',
-                'challenge-form',
-                'cf-challenge'
-            ]
-
-            content_lower = page_content.lower()
-            title_lower = page_title.lower()
-
-            # Look for specific Cloudflare text patterns
-            for indicator in cloudflare_indicators:
-                if indicator in content_lower or indicator in title_lower:
-                    return True
-
-            # Check for specific Cloudflare elements (but not privacy modal elements)
-            cf_selectors = [
-                '.cf-challenge-running',
-                '#challenge-form',
-                '.cf-wrapper',
-                '.cf-browser-verification',
-                'iframe[src*="challenges.cloudflare.com"]',
-                'iframe[src*="cloudflare.com"]'
-            ]
-
-            for selector in cf_selectors:
-                try:
-                    # Fast detection: 300ms for optimal speed
-                    element = await page.wait_for_selector(selector, timeout=300)
-                    if element:
-                        return True
-                except:
-                    continue
-
-            # Don't consider general checkboxes or privacy modals as Cloudflare
-            # Only return True if we find specific Cloudflare indicators
-            return False
-
-        except:
-            return False
-
-    async def handle_cloudflare_challenge(self, page):
-        """Handle Cloudflare challenge if detected with improved selectors"""
-        try:
-            print(f"    🛡️ CLOUDFLARE CHALLENGE DETECTED!")
-            print(f"    🔍 Looking for verification elements...")
-
-            # Enhanced selectors for Cloudflare challenge
-            challenge_selectors = [
-                # Turnstile iframe selectors (most common)
-                'iframe[src*="challenges.cloudflare.com"]',
-                'iframe[src*="cloudflare.com"]',
-                'iframe[title*="Widget containing checkbox"]',
-                'iframe[title*="Widget containing a Cloudflare security challenge"]',
-
-                # Direct checkbox selectors
-                'input[type="checkbox"][data-ray]',
-                'input[type="checkbox"][data-cf-challenge]',
-                '.cf-turnstile',
-                '.cf-challenge-form',
-                '#challenge-form',
-
-                # General fallback
-                'input[type="checkbox"]'
-            ]
-
-            challenge_handled = False
-
-            for selector in challenge_selectors:
-                try:
-                    print(f"    🔍 Checking selector: {selector}")
-
-                    if 'iframe' in selector:
-                        # Handle iframe-based challenge (Turnstile)
-                        try:
-                            iframe = await page.wait_for_selector(selector, timeout=2200)
-                            if iframe:
-                                print(f"    🎯 Found Cloudflare iframe - accessing frame...")
-                                iframe_frame = await iframe.content_frame()
-                                if iframe_frame:
-                                    # Wait a bit for iframe to load
-                                    await asyncio.sleep(1)
-
-                                    # Try multiple checkbox selectors in iframe
-                                    iframe_checkbox_selectors = [
-                                        'input[type="checkbox"]',
-                                        '[role="checkbox"]',
-                                        '.cf-turnstile-checkbox',
-                                        'input'
-                                    ]
-
-                                    for iframe_selector in iframe_checkbox_selectors:
-                                        try:
-                                            checkbox = await iframe_frame.wait_for_selector(iframe_selector, timeout=1100)
-                                            if checkbox:
-                                                print(f"    🎯 Found checkbox in iframe: {iframe_selector}")
-                                                await checkbox.click()
-                                                print(f"    ✅ Clicked Cloudflare checkbox in iframe!")
-                                                challenge_handled = True
-                                                break
-                                        except:
-                                            continue
-
-                                    if challenge_handled:
-                                        break
-                        except Exception as iframe_error:
-                            print(f"    ⚠️ Iframe handling failed: {iframe_error}")
-                            continue
-                    else:
-                        # Handle direct checkbox
-                        try:
-                            element = await page.wait_for_selector(selector, timeout=1100)
-                            if element:
-                                print(f"    🎯 Found element: {selector}")
-
-                                # Check if it's clickable
-                                if 'input' in selector:
-                                    await element.click()
-                                    print(f"    ✅ Clicked checkbox!")
-                                    challenge_handled = True
-                                    break
-                                else:
-                                    # Try to find checkbox within the element
-                                    checkbox = await element.query_selector('input[type="checkbox"]')
-                                    if checkbox:
-                                        await checkbox.click()
-                                        print(f"    ✅ Clicked checkbox within element!")
-                                        challenge_handled = True
-                                        break
-                        except Exception as direct_error:
-                            print(f"    ⚠️ Direct selector failed: {direct_error}")
-                            continue
-
-                except Exception as e:
-                    print(f"    ⚠️ Selector {selector} failed: {e}")
-                    continue
-
-            if challenge_handled:
-                print(f"    ⏳ Waiting for challenge to complete...")
-                await asyncio.sleep(1.5)  # Reduced initial wait
-
-                # Check if challenge is complete
-                for i in range(8):  # Reduced wait time
-                    try:
-                        current_url = page.url
-                        if 'zabasearch.com' in current_url and 'challenge' not in current_url.lower():
-                            print(f"    ✅ Cloudflare challenge completed!")
-                            return True
-                        await asyncio.sleep(1)
-                    except:
-                        break
-
-                print(f"    ⚠️ Challenge handling attempted - continuing...")
-                return True
-            else:
-                print(f"    ❌ Could not find Cloudflare checkbox - skipping...")
-                # Don't fail completely, just continue
-                return True
-
-        except Exception as e:
-            print(f"    ❌ Cloudflare challenge handling error: {e}")
-            # Don't fail the whole process
-            return True
+    # Cloudflare handling removed - not needed for this environment
 
     async def detect_and_handle_popups(self, page):
         """Detect and handle any popups that might appear - ENHANCED"""
@@ -1005,21 +831,12 @@ class ZabaSearchExtractor:
                     except:
                         continue
 
-            # SECOND: After privacy modal is handled, check for Cloudflare challenge
+            # SECOND: Continue with normal processing
             if privacy_handled:
                 print(f"    ⏳ Waiting for page to settle after privacy modal...")
                 await asyncio.sleep(1)  # Reduced from 2
 
-            # Now check for actual Cloudflare challenge (only after privacy modal is handled)
-            if await self.detect_cloudflare_challenge(page):
-                print(f"    🛡️ Cloudflare challenge detected after privacy modal...")
-                try:
-                    await self.handle_cloudflare_challenge(page)
-                except Exception as cf_error:
-                    print(f"    ⚠️ Cloudflare handling error: {cf_error}")
-                    print(f"    🔄 Continuing despite Cloudflare error...")
-                    # Don't crash - just continue
-                return
+            # Cloudflare protection removed - direct processing
 
             if not privacy_handled:
                 pass  # No need for success message
@@ -1048,7 +865,7 @@ class ZabaSearchExtractor:
             self.terms_accepted = True
 
     async def search_person(self, page, first_name: str, last_name: str, target_address: str = "", city: str = "", state: str = "Florida") -> Optional[Dict]:
-        """Search for a person on ZabaSearch with Cloudflare handling"""
+        """Search for a person on ZabaSearch with optimized processing"""
         max_retries = 3
 
         for attempt in range(max_retries):
@@ -1063,19 +880,7 @@ class ZabaSearchExtractor:
                 print(f"  🔧 DEBUG: Navigation completed, page URL: {page.url}")
                 await asyncio.sleep(0.5)  # Reduced from 1
 
-                # Check for Cloudflare challenge first
-                if await self.detect_cloudflare_challenge(page):
-                    print(f"  🛡️ Cloudflare challenge detected - handling...")
-                    if await self.handle_cloudflare_challenge(page):
-                        print(f"  ✅ Cloudflare challenge handled, continuing...")
-                        await asyncio.sleep(1)  # Reduced from 2 - Extra wait after challenge
-                    else:
-                        print(f"  ❌ Failed to handle Cloudflare challenge")
-                        if attempt < max_retries - 1:
-                            print(f"  🔄 Retrying in 10 seconds...")
-                            await asyncio.sleep(5)  # Reduced from 10
-                            continue
-                        return None
+                # Cloudflare protection removed - proceeding directly
 
                 # Check for any other popups
                 # Accept terms if needed
@@ -1149,17 +954,7 @@ class ZabaSearchExtractor:
                 print(f"  ⏳ Waiting for results to load...")
                 await self.human_delay("slow")  # Longer wait for results
 
-                # Check again for Cloudflare after search
-                if await self.detect_cloudflare_challenge(page):
-                    print(f"  🛡️ Cloudflare challenge after search - handling...")
-                    if await self.handle_cloudflare_challenge(page):
-                        await asyncio.sleep(2)  # Reduced from 3 - Faster wait after challenge
-                    else:
-                        if attempt < max_retries - 1:
-                            print(f"  🔄 Retrying after Cloudflare challenge...")
-                            await asyncio.sleep(8)  # Reduced from 15
-                            continue
-                        return None
+                # Cloudflare protection removed - proceeding to data extraction
 
                 # Try to extract data directly
                 print(f"  📊 Attempting to extract person data...")
@@ -1991,7 +1786,7 @@ class ZabaSearchExtractor:
                 # MINIMAL delay between sessions - ULTRA FAST
                 if session_num < total_sessions - 1:
                     print(f"\n⚡ Quick 1-2 second delay before next session...")
-                    await asyncio.sleep(random.uniform(1, 2))
+                    await asyncio.sleep(random.uniform(0.5, 1))  # Optimized record processing delay
 
         print(f"\n🎉 ALL PROCESSING COMPLETE!")
         print(f"📊 Successfully found phone numbers for {total_success}/{len(remaining_records)} records")
@@ -2073,7 +1868,7 @@ async def main():
     print(f'✅ Will save results directly to: {csv_path}')
 
     print(f"\n🔄 STARTING ZabaSearch extraction with SESSION-BASED processing...")
-    print(f"🛡️ Enhanced with Cloudflare challenge detection and bypass")
+    print(f"🛡️ Enhanced with optimized processing and popup handling")
     print(f"🚀 OPTIMIZED: 1 search per session - MAXIMUM STEALTH & SPEED")
     print(f"⚡ MINIMAL delays - ULTRA FAST processing")
     print("=" * 70)

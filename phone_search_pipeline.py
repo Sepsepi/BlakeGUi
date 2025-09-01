@@ -153,10 +153,10 @@ class PhoneSearchPipeline:
                                 self.logger.info("📊 Using 4 batches for small file (bandwidth optimized)")
                             elif records_needing_processing < 500:
                                 batch_count = 6  # Medium files: 6 batches  
-                                self.logger.info("� Using 6 batches for medium file (balanced performance)")
+                                self.logger.info("📊 Using 6 batches for medium file (balanced performance)")
                             else:
-                                batch_count = 10  # Large files: 10 batches
-                                self.logger.info("📊 Using 10 batches for large file (maximum parallel processing)")
+                                batch_count = 15  # Large files: 15 batches
+                                self.logger.info("📊 Using 15 batches for large file (maximum parallel processing)")
                             
                             self.logger.info("�🚀 Initiating multi-terminal batch processing...")
                             return self._process_in_batches(formatted_path, output_path, records_needing_processing, csv_path, batch_count)
@@ -192,6 +192,16 @@ class PhoneSearchPipeline:
 
             if success:
                 self.logger.info(f"✅ Processing completed successfully: {output_path}")
+                
+                # Clean up temp folder after single file processing
+                try:
+                    from file_cleanup import cleanup_temp_folder
+                    temp_cleanup_result = cleanup_temp_folder()
+                    if temp_cleanup_result['files_deleted'] > 0:
+                        self.logger.info(f"🧹 Temp cleanup: {temp_cleanup_result['files_deleted']} files deleted, {temp_cleanup_result['size_freed_mb']:.2f} MB freed")
+                except Exception as cleanup_error:
+                    self.logger.warning(f"⚠️ Temp cleanup failed: {cleanup_error}")
+                
                 return True
             else:
                 self.logger.error("❌ ZabaSearch processing failed")
@@ -366,6 +376,15 @@ class PhoneSearchPipeline:
                     if os.path.exists(batch_output):
                         os.remove(batch_output)
 
+                # Clean up temp folder after all batches are complete
+                try:
+                    from file_cleanup import cleanup_temp_folder
+                    temp_cleanup_result = cleanup_temp_folder()
+                    if temp_cleanup_result['files_deleted'] > 0:
+                        self.logger.info(f"🧹 Final temp cleanup: {temp_cleanup_result['files_deleted']} files deleted, {temp_cleanup_result['size_freed_mb']:.2f} MB freed")
+                except Exception as cleanup_error:
+                    self.logger.warning(f"⚠️ Temp cleanup failed: {cleanup_error}")
+
                 return True
             else:
                 self.logger.error("❌ No successful batches to combine")
@@ -411,7 +430,6 @@ class PhoneSearchPipeline:
 
                                 # Use the full async processing method with timeout
                                 import asyncio
-                                import signal
 
                                 async def run_batch():
                                     try:
@@ -425,7 +443,28 @@ class PhoneSearchPipeline:
                                 try:
                                     asyncio.run(run_batch())
                                 except Exception as e:
+                                    error_msg = str(e).lower()
                                     self.logger.error(f"   ❌ Batch {batch_num}: ZabaSearch processing failed: {e}")
+                                    
+                                    # Check for specific error types
+                                    if "broken pipe" in error_msg or "errno 32" in error_msg:
+                                        self.logger.warning(f"   🔄 Batch {batch_num}: Connection error - likely proxy or network issue")
+                                        # Try to continue with batch file if it exists and has some data
+                                        if os.path.exists(batch_file):
+                                            try:
+                                                # Check if batch file has any processed data
+                                                import pandas as pd
+                                                test_df = pd.read_csv(batch_file)
+                                                if len(test_df) > 0:
+                                                    self.logger.info(f"   🔄 Batch {batch_num}: Found partial results, using available data")
+                                                    # Copy partial results to output
+                                                    if batch_file != output_path:
+                                                        import shutil
+                                                        shutil.copy2(batch_file, output_path)
+                                                    return True
+                                            except Exception as read_error:
+                                                self.logger.error(f"   ❌ Batch {batch_num}: Cannot read partial results: {read_error}")
+                                    
                                     return False
 
                                 # The results should be written back to the batch_file
@@ -469,10 +508,10 @@ class PhoneSearchPipeline:
                 threads.append(thread)
                 thread.start()
 
-                # Staggered start: 5 second delay between batches to prevent proxy conflicts
+                # Staggered start: 2 second delay between batches to prevent proxy conflicts
                 if i < len(batch_files) - 1:  # Don't delay after the last one
-                    self.logger.info(f"   ⏸️ Waiting 5 seconds before starting batch {i+2} to prevent proxy conflicts...")
-                    time.sleep(5)
+                    self.logger.info(f"   ⏸️ Waiting 2 seconds before starting batch {i+2} to prevent proxy conflicts...")
+                    time.sleep(2)
 
             # Wait for all threads to complete
             self.logger.info("⏳ Waiting for all batches to complete...")

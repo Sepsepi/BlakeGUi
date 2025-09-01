@@ -800,14 +800,8 @@ def main():
             if count > 0:
                 print(f"  {strategy}: {count} records")
 
-        # Clean up temp folder after successful merge
-        try:
-            import file_cleanup
-            temp_cleanup_result = file_cleanup.cleanup_temp_folder()
-            if temp_cleanup_result['files_deleted'] > 0:
-                print(f"\n🧹 Temp cleanup: {temp_cleanup_result['files_deleted']} files deleted, {temp_cleanup_result['size_freed_mb']:.2f} MB freed")
-        except Exception as cleanup_error:
-            print(f"\n⚠️ Temp cleanup failed: {cleanup_error}")
+        # Note: Temp cleanup moved to end of batch processing to avoid file conflicts
+        # during parallel batch execution
 
     else:
         print(f"❌ Phone merge failed: {results['error']}")

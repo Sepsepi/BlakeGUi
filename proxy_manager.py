@@ -81,25 +81,9 @@ class ProxyManager:
 proxy_manager = ProxyManager()
 
 def get_proxy_for_zabasearch() -> Optional[Dict]:
-    """Get proxy specifically for ZabaSearch operations with unique session"""
+    """Get proxy specifically for ZabaSearch operations"""
+    # Use original fast random selection
     proxy = proxy_manager.get_random_proxy()
-    if proxy:
-        # Create a unique session ID for each batch to prevent conflicts
-        import random
-        import time
-        session_id = f"batch_{int(time.time())}_{random.randint(1000, 9999)}"
-
-        # Add session to password for unique proxy sessions
-        if 'password' in proxy:
-            original_password = proxy['password']
-            # If password already has session, replace it
-            if '_session-' in original_password:
-                base_password = original_password.split('_session-')[0]
-            else:
-                base_password = original_password
-            proxy['password'] = f"{base_password}_session-{session_id}"
-
-        proxy_manager.logger.info(f"🔒 Created unique proxy session: {session_id}")
     return proxy
 
 def get_proxy_count() -> int:
