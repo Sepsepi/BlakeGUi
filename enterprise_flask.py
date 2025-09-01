@@ -9,6 +9,7 @@ import time
 import json
 import uuid
 from datetime import datetime
+from datetime import timedelta
 from werkzeug.utils import secure_filename
 from werkzeug.exceptions import RequestEntityTooLarge
 import csv_format_handler
@@ -22,6 +23,7 @@ from column_syncer import ColumnSyncer
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max file size
 app.config['SECRET_KEY'] = 'blakegui-multi-user-session-key-2025'  # For session encryption
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)  # Sessions last 30 days
 
 # Base directories for user isolation
 app.config['BASE_UPLOAD_FOLDER'] = os.path.join(os.getcwd(), 'uploads')
@@ -2336,41 +2338,51 @@ def cleanup_session_batch_files(user_id: str, completed_filename: str):
 
 @app.route('/download/<filename>')
 def download_file(filename):
-    """Download processed files from user-specific directories with automatic batch cleanup."""
+    """Download processed files from ALL user directories (since recent files shows all users)."""
     try:
-        # Get user session and directories
+        # Get current user session for logging
         user_id = get_user_id()
         user_config = get_user_config(user_id)
         
-        # Look for the file in user's uploads folder first
-        file_path = os.path.join(user_config['UPLOAD_FOLDER'], filename)
-        if os.path.exists(file_path):
-            logger.info(f"📥 File download: {filename} from uploads (User: {user_id})")
+        # First, try the current user's directories
+        search_paths = [
+            user_config['UPLOAD_FOLDER'],
+            user_config['RESULTS_FOLDER'],
+            user_config['TEMP_FOLDER']
+        ]
+        
+        for folder in search_paths:
+            file_path = os.path.join(folder, filename)
+            if os.path.exists(file_path):
+                logger.info(f"📥 File download: {filename} from current user folder (User: {user_id})")
+                cleanup_session_batch_files(user_id, filename)
+                return send_file(file_path, as_attachment=True, download_name=filename)
+        
+        # If not found in current user, search ALL user directories
+        base_results_folder = app.config['BASE_RESULTS_FOLDER']
+        base_uploads_folder = app.config['BASE_UPLOAD_FOLDER']
+        
+        if os.path.exists(base_results_folder):
+            # Search all user result directories
+            user_dirs = [d for d in os.listdir(base_results_folder) 
+                        if os.path.isdir(os.path.join(base_results_folder, d))]
             
-            # Perform session-specific batch cleanup after successful download
-            cleanup_session_batch_files(user_id, filename)
+            for other_user_dir in user_dirs:
+                file_path = os.path.join(base_results_folder, other_user_dir, filename)
+                if os.path.exists(file_path):
+                    logger.info(f"📥 File download: {filename} from user {other_user_dir} (Requested by: {user_id})")
+                    return send_file(file_path, as_attachment=True, download_name=filename)
+        
+        if os.path.exists(base_uploads_folder):
+            # Search all user upload directories
+            user_dirs = [d for d in os.listdir(base_uploads_folder) 
+                        if os.path.isdir(os.path.join(base_uploads_folder, d))]
             
-            return send_file(file_path, as_attachment=True, download_name=filename)
-
-        # Also check user's results folder
-        file_path = os.path.join(user_config['RESULTS_FOLDER'], filename)
-        if os.path.exists(file_path):
-            logger.info(f"📥 File download: {filename} from results (User: {user_id})")
-            
-            # Perform session-specific batch cleanup after successful download
-            cleanup_session_batch_files(user_id, filename)
-            
-            return send_file(file_path, as_attachment=True, download_name=filename)
-
-        # Check user's temp folder as fallback
-        file_path = os.path.join(user_config['TEMP_FOLDER'], filename)
-        if os.path.exists(file_path):
-            logger.info(f"📥 File download: {filename} from temp (User: {user_id})")
-            
-            # Perform session-specific batch cleanup after successful download
-            cleanup_session_batch_files(user_id, filename)
-            
-            return send_file(file_path, as_attachment=True, download_name=filename)
+            for other_user_dir in user_dirs:
+                file_path = os.path.join(base_uploads_folder, other_user_dir, filename)
+                if os.path.exists(file_path):
+                    logger.info(f"📥 File download: {filename} from user {other_user_dir} uploads (Requested by: {user_id})")
+                    return send_file(file_path, as_attachment=True, download_name=filename)
 
         logger.warning(f"❌ File not found: {filename} (User: {user_id})")
         return jsonify({'error': 'File not found'}), 404
@@ -2615,31 +2627,46 @@ def cleanup_files():
 
 @app.route('/recent_files', methods=['GET'])
 def get_recent_files():
-    """Get recent processed files for current user session - FINAL OUTPUTS ONLY"""
+    """Get recent processed files from ALL USERS - FINAL OUTPUTS ONLY"""
     try:
-        user_id = get_user_id()
-        user_config = get_user_config(user_id)
+        user_id = get_user_id()  # Still get current user for logging
         
-        # Get user-specific recent files by scanning user directories
+        # Get ALL user directories from the base results folder
         import glob
+        base_results_folder = app.config['BASE_RESULTS_FOLDER']
         
-        # 🎯 FILTER FOR FINAL OUTPUT FILES ONLY
-        # Look for final output files and merge files in user's results directory
-        final_output_patterns = [
-            os.path.join(user_config['RESULTS_FOLDER'], "*_processed.csv"),         # Final processed files
-            os.path.join(user_config['RESULTS_FOLDER'], "*_with_phones.csv"),      # Files with phone numbers
-            os.path.join(user_config['RESULTS_FOLDER'], "merge_*.csv"),            # Merge files
-            os.path.join(user_config['RESULTS_FOLDER'], "*merged*.csv"),           # Other merged files
-            os.path.join(user_config['RESULTS_FOLDER'], "*_final.csv"),            # Final output files
-            os.path.join(user_config['RESULTS_FOLDER'], "*_complete.csv"),         # Complete files
-            os.path.join(user_config['RESULTS_FOLDER'], "Cleaned_*.csv"),          # Validator app outputs
-            os.path.join(user_config['RESULTS_FOLDER'], "Merged_*.csv")            # Phone extractor app outputs
-        ]
-        
+        # � SCAN ALL USER DIRECTORIES FOR FINAL OUTPUT FILES
         all_final_files = []
-        for pattern in final_output_patterns:
-            files = glob.glob(pattern)
-            all_final_files.extend(files)
+        
+        # Get all user directories
+        if os.path.exists(base_results_folder):
+            user_dirs = [d for d in os.listdir(base_results_folder) 
+                        if os.path.isdir(os.path.join(base_results_folder, d))]
+            
+            logger.info(f"📁 Scanning {len(user_dirs)} user directories for recent files...")
+            
+            # Define final output file patterns
+            file_patterns = [
+                "*_processed.csv",         # Final processed files
+                "*_with_phones.csv",      # Files with phone numbers
+                "merge_*.csv",            # Merge files
+                "*merged*.csv",           # Other merged files
+                "*_final.csv",            # Final output files
+                "*_complete.csv",         # Complete files
+                "Cleaned_*.csv",          # Validator app outputs
+                "Merged_*.csv",           # Phone extractor app outputs
+                "Enhanced_*.csv"          # CyberBackgroundChecks enhanced files
+            ]
+            
+            # Scan each user directory
+            for user_dir in user_dirs:
+                user_path = os.path.join(base_results_folder, user_dir)
+                
+                # Apply patterns to this user's directory
+                for pattern in file_patterns:
+                    full_pattern = os.path.join(user_path, pattern)
+                    files = glob.glob(full_pattern)
+                    all_final_files.extend(files)
         
         # Remove duplicates and sort by modification time (newest first)
         all_final_files = list(set(all_final_files))
@@ -2678,18 +2705,21 @@ def get_recent_files():
         merge_files = [f for f in final_file_info if 'merge_' in f['name'].lower() or 'merged' in f['name'].lower()]
         other_final_files = [f for f in final_file_info if f not in merge_files]
         
-        logger.info(f"📁 Final files filter: {len(final_file_info)} total final files")
-        logger.info(f"� Merge files: {[f['name'] for f in merge_files]}")
+        logger.info(f"🌍 Found {len(final_file_info)} total final files across all users")
+        logger.info(f"🔗 Merge files: {[f['name'] for f in merge_files]}")
         logger.info(f"📄 Other final files: {[f['name'] for f in other_final_files[:5]]}")  # Log first 5
         
         return jsonify({
             'final_files': final_file_info,
+            'phone_files': final_file_info,  # Frontend expects this
+            'address_files': final_file_info,  # Frontend expects this too
             'merge_files': merge_files,
             'other_files': other_final_files,
             'total_files': len(final_file_info),
             'total_merge': len(merge_files),
             'total_other': len(other_final_files),
-            'user_id': user_id  # For debugging
+            'user_id': user_id,  # Current user (for debugging)
+            'scope': 'all_users'  # Indicate this shows files from all users
         })
     except Exception as e:
         logger.error(f"Error getting recent files: {str(e)}")
