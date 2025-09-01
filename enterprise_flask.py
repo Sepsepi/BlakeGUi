@@ -813,20 +813,12 @@ def upload_file():
                     logger.info(f"🔧 Starting Column Syncer processing... (User: {user_id})")
 
                     syncer = ColumnSyncer()
-                    result = syncer.process_file(filepath)
+                    result = syncer.process_file(filepath, user_config['RESULTS_FOLDER'])
 
                     if result['success']:
-                        # Read the processed file
-                        processed_df = pd.read_csv(result['output_file'])
-                        logger.info(f"✅ Column Syncer complete: {len(processed_df)} records processed (User: {user_id})")
-
-                        # Save with Cleaned_ prefix + original filename to user's results folder
-                        original_name = os.path.splitext(filename)[0]
-                        original_ext = os.path.splitext(filename)[1]
-                        clean_filename = f"Cleaned_{original_name}{original_ext}"
-                        results_path = os.path.join(user_config['RESULTS_FOLDER'], clean_filename)
-                        processed_df.to_csv(results_path, index=False)
-                        logger.info(f"💾 Column Syncer results saved: {clean_filename} (User: {user_id})")
+                        # Column syncer already saved the file with Cleaned_ prefix to user's results folder
+                        clean_filename = os.path.basename(result['output_file'])
+                        logger.info(f"✅ Column Syncer complete: File saved as {clean_filename} (User: {user_id})")
 
                         # Return immediate download response instead of analysis
                         stats = result.get('stats', {})
@@ -1345,10 +1337,10 @@ def analyze():
                     if phone_cols:
                         logger.info(f"✅ Temp file has phone data in columns: {phone_cols}")
 
-                        # Copy temp file to results folder with proper name
+                        # Copy temp file to user-specific results folder with proper name
                         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                         results_filename = f"phone_extraction_{timestamp}.csv"
-                        results_path = os.path.join(app.config['RESULTS_FOLDER'], results_filename)
+                        results_path = os.path.join(user_config['RESULTS_FOLDER'], results_filename)
 
                         temp_df.to_csv(results_path, index=False, encoding='utf-8')
                         result_file = results_path
@@ -1370,7 +1362,7 @@ def analyze():
                             original_basename = os.path.basename(original_filepath)  # Use ORIGINAL uploaded file
                             base_name = os.path.splitext(original_basename)[0]
                             merged_filename = f"Merged_{base_name}.csv"  # Simple naming: Merged_originalname.csv
-                            merged_filepath = os.path.join(app.config['RESULTS_FOLDER'], merged_filename)
+                            merged_filepath = os.path.join(user_config['RESULTS_FOLDER'], merged_filename)
 
                             # Perform the merge using our enhanced merger
                             merge_result = merger.merge_phone_results(original_filepath, results_path, merged_filepath)  # Use original file
@@ -1414,7 +1406,7 @@ def analyze():
                         # Save original data with proper headers when no phone data found
                         columns_to_drop = ['DirectName_Phone_Primary', 'DirectName_Phone_Secondary', 'DirectName_Phone_All']
                         final_processed_df = temp_df.drop(columns=[col for col in columns_to_drop if col in temp_df.columns])
-                        fallback_file = os.path.join(app.config['RESULTS_FOLDER'], f"phone_extraction_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+                        fallback_file = os.path.join(user_config['RESULTS_FOLDER'], f"phone_extraction_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
                         final_processed_df.to_csv(fallback_file, index=False)
                         result_file = fallback_file
 
@@ -1422,7 +1414,7 @@ def analyze():
                     logger.error(f"Error processing temp file: {e}")
                     # Create basic fallback result
                     df = read_data_file(analysis_filepath)
-                    fallback_file = os.path.join(app.config['RESULTS_FOLDER'], f"phone_extraction_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+                    fallback_file = os.path.join(user_config['RESULTS_FOLDER'], f"phone_extraction_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
                     df.to_csv(fallback_file, index=False)
                     result_file = fallback_file
             else:
@@ -1437,7 +1429,7 @@ def analyze():
 
         elif analysis_type == 'address':
             # Enhanced address processing with BCPA and phone separation
-            result_file = process_enhanced_address_pipeline(filepath, max_records)
+            result_file = process_enhanced_address_pipeline(filepath, max_records, user_config)
 
         else:
             return jsonify({'error': 'Invalid analysis type'}), 400
@@ -1457,7 +1449,7 @@ def analyze():
         logger.error(f"Error in analyze: {str(e)}")
         return jsonify({'error': f'Analysis failed: {str(e)}'}), 500
 
-def process_enhanced_address_pipeline(filepath, max_records):
+def process_enhanced_address_pipeline(filepath, max_records, user_config):
     """Process file with enhanced address parsing and BCPA owner lookup, then separate by phone status."""
     try:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1637,7 +1629,7 @@ def process_enhanced_address_pipeline(filepath, max_records):
         if not records_without_names:
             logger.warning("No records without names found - all records already have name information")
             # Create a summary file showing why no processing is needed
-            summary_file = os.path.join(app.config['RESULTS_FOLDER'], f"no_processing_needed_{timestamp}.csv")
+            summary_file = os.path.join(user_config['RESULTS_FOLDER'], f"no_processing_needed_{timestamp}.csv")
 
             # Create a small summary showing the name coverage
             summary_data = {
@@ -1767,6 +1759,10 @@ def process_enhanced_address_pipeline(filepath, max_records):
 def merge_files():
     """Smart merge: Replace/update original records with enhanced processed data."""
     try:
+        # Get user session for multi-user support
+        user_id = get_user_id()
+        user_config = get_user_config(user_id)
+        
         data = request.get_json()
         original_filepath = data.get('original_filepath')
         processed_filepath = data.get('processed_filepath')
@@ -1777,7 +1773,7 @@ def merge_files():
         if not processed_filepath or not os.path.exists(processed_filepath):
             return jsonify({'error': 'Processed file not found'}), 404
 
-        logger.info(f"🔄 Smart merging: Replacing original records with enhanced data")
+        logger.info(f"🔄 Smart merging: Replacing original records with enhanced data (User: {user_id})")
 
         # Load both files with explicit fresh read (no caching)
         original_df = read_data_file(original_filepath)
@@ -1786,12 +1782,12 @@ def merge_files():
         logger.info(f"Original file: {len(original_df)} records")
         logger.info(f"Processed file: {len(processed_df)} records")
 
-        # Create merged file with simple naming - ALWAYS CSV
+        # Create merged file with simple naming - ALWAYS CSV (save to user-specific results folder)
         original_basename = os.path.basename(original_filepath)
         # Remove file extension and add "Merged_" prefix - Force CSV extension
         base_name = os.path.splitext(original_basename)[0]
         merged_filename = f"Merged_{base_name}.csv"  # Simple naming: Merged_originalname.csv
-        merged_filepath = os.path.join(app.config['RESULTS_FOLDER'], merged_filename)
+        merged_filepath = os.path.join(user_config['RESULTS_FOLDER'], merged_filename)
 
         # Strategy: REPLACE records that were processed with enhanced versions
         # Step 1: Identify matching key for records (address-based matching)
@@ -2141,13 +2137,17 @@ def merge_files():
 def ai_format_addresses():
     """Format addresses using AI for better BCPA compatibility"""
     try:
+        # Get user session for multi-user support
+        user_id = get_user_id()
+        user_config = get_user_config(user_id)
+        
         data = request.get_json()
         file_path = data.get('file_path')
 
         if not file_path or not os.path.exists(file_path):
             return jsonify({'error': 'File not found'}), 400
 
-        logger.info(f"Starting AI address formatting for: {file_path}")
+        logger.info(f"Starting AI address formatting for: {file_path} (User: {user_id})")
 
         # Use intelligent formatter
         try:

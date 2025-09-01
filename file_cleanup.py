@@ -20,15 +20,17 @@ _cleanup_thread = None
 def cleanup_old_files(max_age_days=7):
     """
     Clean up files older than max_age_days from all working directories
+    PRESERVES final output files (Cleaned_* and Merged_* files) regardless of age
 
     Args:
         max_age_days (int): Maximum age of files to keep in days
                            Set to 0 to delete ALL files regardless of age
+                           EXCEPT final output files which are always preserved
     """
     current_time = time.time()
     cutoff_time = current_time - (max_age_days * 24 * 60 * 60)
 
-    # Special case: if max_age_days is 0, delete all files
+    # Special case: if max_age_days is 0, delete all files EXCEPT final outputs
     delete_all = (max_age_days == 0)
 
     # Directories to clean
@@ -42,6 +44,21 @@ def cleanup_old_files(max_age_days=7):
 
     total_deleted = 0
     total_size_freed = 0
+
+    # Helper function to check if a file should be preserved
+    def should_preserve_file(file_path):
+        """Check if this is a final output file that should be preserved"""
+        filename = file_path.name
+        # Preserve final output files: Cleaned_* and Merged_* files
+        if filename.startswith('Cleaned_') or filename.startswith('Merged_'):
+            return True
+        # Also preserve other important final files
+        if any(keyword in filename.lower() for keyword in [
+            'reverse_address_extracted', 'with_owners', 'bcpa_results',
+            'owner_search_results', 'address_enhanced'
+        ]):
+            return True
+        return False
 
     # First, clean up phone_ready_*.csv files from main directory
     logger.info("🧹 Cleaning up phone_ready_*.csv files from main folder...")
@@ -82,6 +99,11 @@ def cleanup_old_files(max_age_days=7):
                 if file_path.is_file():
                     file_stat = file_path.stat()
                     file_age_days = (current_time - file_stat.st_mtime) / (24 * 60 * 60)
+
+                    # Check if this is a final output file that should be preserved
+                    if should_preserve_file(file_path):
+                        logger.info(f"🛡️  Preserving final output file: {file_path} (age: {file_age_days:.1f} days)")
+                        continue
 
                     # Check if file should be deleted
                     should_delete = delete_all or (file_stat.st_mtime < cutoff_time)
@@ -168,8 +190,8 @@ def get_last_processed_files():
         filename_lower = filename.lower()
 
         # ONLY SHOW FINAL OUTPUT FILES - Filter by specific prefixes
-        # Phone extraction final files: Clean_ and Merged_ files
-        if filename.startswith('Clean_') or filename.startswith('Merged_'):
+        # Phone extraction final files: Cleaned_ and Merged_ files
+        if filename.startswith('Cleaned_') or filename.startswith('Merged_'):
             # These are final phone extraction outputs
             results['phone'].append(file_info)
 
