@@ -8,6 +8,7 @@ import glob
 import time
 import json
 import uuid
+import subprocess
 from datetime import datetime
 from datetime import timedelta
 from werkzeug.utils import secure_filename
@@ -3091,6 +3092,44 @@ def terminal_feed():
 
     from flask import Response
     return Response(generate(), mimetype='text/event-stream')
+
+@app.route('/webhook/deploy', methods=['POST'])
+def github_webhook():
+    """Auto-deploy when GitHub pushes to main branch"""
+    try:
+        payload = request.json
+
+        # Only deploy on main branch pushes
+        if payload.get('ref') == 'refs/heads/main':
+            logger.info("🚀 GitHub push detected - deploying...")
+
+            # Pull latest code
+            result = subprocess.run(
+                ['git', 'pull'],
+                cwd='/var/www/webapp',
+                capture_output=True,
+                text=True
+            )
+
+            if result.returncode == 0:
+                logger.info("✅ Code pulled successfully")
+
+                # Restart Flask by killing current process
+                pid = os.getpid()
+                subprocess.Popen([
+                    'bash', '-c',
+                    f'sleep 2 && kill {pid} && cd /var/www/webapp && nohup python3 enterprise_flask.py > /dev/null 2>&1 &'
+                ])
+
+                return jsonify({'status': 'deploying', 'message': 'App will restart in 2 seconds'}), 200
+            else:
+                return jsonify({'error': 'git pull failed', 'output': result.stderr}), 500
+
+        return jsonify({'status': 'ignored', 'message': 'Not a main branch push'}), 200
+
+    except Exception as e:
+        logger.error(f"Webhook error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     try:
