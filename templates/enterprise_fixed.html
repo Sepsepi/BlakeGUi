@@ -2790,6 +2790,15 @@
                 }, 5000);
             };
 
+            // Auto-refresh terminal connection every 5 minutes to prevent stale connections
+            setInterval(() => {
+                if (eventSource.readyState === EventSource.OPEN) {
+                    addTerminalLine('🔄 Refreshing terminal connection...', 'info');
+                    eventSource.close();
+                    setTimeout(() => startTerminalFeed(), 1000);
+                }
+            }, 5 * 60 * 1000); // 5 minutes
+
             // Monitor frontend activity
             const originalProcessFile = window.processFile;
             if (originalProcessFile) {
