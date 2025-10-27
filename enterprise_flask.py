@@ -24,7 +24,7 @@ from column_syncer import ColumnSyncer
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max file size
 app.config['SECRET_KEY'] = 'blakegui-multi-user-session-key-2025'  # For session encryption
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)  # Sessions last 30 days
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=4)  # Sessions last 4 hours
 
 # Base directories for user isolation
 app.config['BASE_UPLOAD_FOLDER'] = os.path.join(os.getcwd(), 'uploads')
