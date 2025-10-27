@@ -2674,8 +2674,9 @@
         }
 
         // Terminal Feed Functions
-        let terminalAutoScroll = false; // Disabled auto-scroll
+        let terminalAutoScroll = true; // Smart auto-scroll enabled by default
         let terminalLines = 1;
+        let userScrolledUp = false; // Track if user manually scrolled up
 
         function clearTerminalContent() {
             document.getElementById('terminalContent').innerHTML = `
@@ -2724,11 +2725,11 @@
                 terminalContent.removeChild(lines[0]);
             }
 
-            // Auto-scroll to bottom (disabled)
-            // if (terminalAutoScroll) {
-            //     const container = document.getElementById('terminalContainer');
-            //     container.scrollTop = container.scrollHeight;
-            // }
+            // Smart auto-scroll: Only scroll if user hasn't manually scrolled up
+            if (terminalAutoScroll && !userScrolledUp) {
+                const container = document.getElementById('terminalContainer');
+                container.scrollTop = container.scrollHeight;
+            }
 
             updateTerminalStats();
         }
@@ -2846,6 +2847,25 @@
         // Start terminal feed when page loads
         document.addEventListener('DOMContentLoaded', function() {
             startTerminalFeed();
+
+            // Add scroll listener for smart auto-scroll behavior
+            const terminalContainer = document.getElementById('terminalContainer');
+            if (terminalContainer) {
+                terminalContainer.addEventListener('scroll', function() {
+                    const container = this;
+                    const threshold = 50; // 50px from bottom
+                    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+
+                    // If user scrolled to bottom (within threshold), resume auto-scroll
+                    if (distanceFromBottom <= threshold) {
+                        userScrolledUp = false;
+                    }
+                    // If user scrolled up from bottom, pause auto-scroll
+                    else if (distanceFromBottom > threshold) {
+                        userScrolledUp = true;
+                    }
+                });
+            }
         });
     </script>
 </body>
