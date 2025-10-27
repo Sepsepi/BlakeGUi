@@ -2782,22 +2782,21 @@
 
             eventSource.onerror = function(event) {
                 addTerminalLine('Connection to terminal feed lost - Attempting to reconnect...', 'warning');
+                eventSource.close();
                 setTimeout(() => {
-                    if (eventSource.readyState === EventSource.CLOSED) {
-                        addTerminalLine('Reconnecting to terminal feed...', 'info');
-                        startTerminalFeed();
-                    }
-                }, 5000);
+                    addTerminalLine('Reconnecting to terminal feed...', 'info');
+                    startTerminalFeed();
+                }, 2000); // Reconnect after 2 seconds
             };
 
-            // Auto-refresh terminal connection every 5 minutes to prevent stale connections
-            setInterval(() => {
-                if (eventSource.readyState === EventSource.OPEN) {
-                    addTerminalLine('🔄 Refreshing terminal connection...', 'info');
-                    eventSource.close();
+            // Keep-alive: Check connection health every second and reconnect if dead
+            const keepAliveInterval = setInterval(() => {
+                if (eventSource.readyState === EventSource.CLOSED) {
+                    clearInterval(keepAliveInterval);
+                    addTerminalLine('🔄 Terminal disconnected - Reconnecting...', 'warning');
                     setTimeout(() => startTerminalFeed(), 1000);
                 }
-            }, 5 * 60 * 1000); // 5 minutes
+            }, 1000); // Check every second
 
             // Monitor frontend activity
             const originalProcessFile = window.processFile;
