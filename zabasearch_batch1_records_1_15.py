@@ -1063,171 +1063,96 @@ class ZabaSearchExtractor:
                             # Get next sibling elements that contain the phone numbers
                             phone_content_elements = await card.query_selector_all('h3:has-text("Last Known Phone Numbers") ~ *')
 
-                            section_text = ""
+                            # NEW: Extract phones with type checking for MOBILE ONLY
+                            mobile_phones = []
+                            phone_pattern = r'\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}'
+
                             for element in phone_content_elements:
                                 try:
                                     element_text = await element.inner_text()
-                                    section_text += element_text + "\n"
+
                                     # Stop if we hit another section heading
-                                    if any(heading in element_text for heading in ["Associated Email", "Associated Phone", "Jobs", "Past Addresses"]):
+                                    if any(heading in element_text for heading in ["Associated Email", "Associated Phone", "Jobs", "Past Addresses", "Last Known Address"]):
                                         break
-                                except:
+
+                                    # Check if this element contains a phone number
+                                    phone_match = re.search(phone_pattern, element_text)
+                                    if phone_match:
+                                        phone_raw = phone_match.group()
+
+                                        # Standardize format to (XXX) XXX-XXXX
+                                        digits = re.sub(r'\D', '', phone_raw)
+                                        if len(digits) == 10:
+                                            formatted_phone = f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
+
+                                            # NEW: Check if phone type is MOBILE (case-insensitive)
+                                            element_text_lower = element_text.lower()
+
+                                            # Look for "mobile", "wireless", or "cellular" indicators
+                                            is_mobile = any(indicator in element_text_lower for indicator in ['mobile', 'wireless', 'cellular'])
+                                            is_landline = 'landline' in element_text_lower
+
+                                            if is_mobile and not is_landline:
+                                                # Check if it's marked as primary
+                                                is_primary = "primary phone" in element_text_lower
+
+                                                if formatted_phone not in [p['number'] for p in mobile_phones]:
+                                                    mobile_phones.append({
+                                                        'number': formatted_phone,
+                                                        'is_primary': is_primary
+                                                    })
+                                                    print(f"    📱 Found MOBILE phone: {formatted_phone}" + (" (Primary)" if is_primary else ""))
+                                            elif is_landline:
+                                                print(f"    🏠 Skipping LANDLINE: {formatted_phone}")
+                                            else:
+                                                print(f"    ❓ Unknown type for: {formatted_phone} - skipping")
+
+                                except Exception as elem_error:
                                     continue
 
-                            if section_text.strip():
-                                print(f"    📋 Section text: {section_text[:200]}...")
+                            # Process collected mobile phones
+                            if mobile_phones:
+                                # Extract just the phone numbers
+                                cleaned_phones = [p['number'] for p in mobile_phones]
+                                phones["all"] = cleaned_phones
 
-                                # Extract phone numbers only from this specific section
-                                phone_pattern = r'\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}'
-                                phone_matches = re.findall(phone_pattern, section_text)
+                                # Look for primary phone (one marked as primary)
+                                primary_found = False
+                                for phone_info in mobile_phones:
+                                    if phone_info['is_primary']:
+                                        phones["primary"] = phone_info['number']
+                                        primary_found = True
+                                        print(f"    👑 Using designated primary MOBILE phone: {phone_info['number']}")
+                                        break
 
-                                if phone_matches:
-                                    # Clean up phone numbers
-                                    cleaned_phones = []
-                                    for phone in phone_matches:
-                                        # Standardize format to (XXX) XXX-XXXX
-                                        digits = re.sub(r'\D', '', phone)
-                                        if len(digits) == 10:
-                                            formatted = f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
-                                            if formatted not in cleaned_phones:
-                                                cleaned_phones.append(formatted)
+                                # If no explicit primary found, use first phone as primary
+                                if not primary_found and cleaned_phones:
+                                    phones["primary"] = cleaned_phones[0]
+                                    print(f"    📞 Using first MOBILE phone as primary: {cleaned_phones[0]}")
 
-                                    phones["all"] = cleaned_phones
-
-                                    # Look for primary phone designation in the section text
-                                    primary_found = False
+                                # Set secondary phone
+                                if len(cleaned_phones) > 1:
                                     for phone in cleaned_phones:
-                                        # Check if this phone has "(Primary Phone)" designation
-                                        if "Primary Phone" in section_text and phone in section_text:
-                                            # Find the line containing this phone number
-                                            lines = section_text.split('\n')
-                                            for line in lines:
-                                                if phone.replace('(', '').replace(')', '').replace('-', '').replace(' ', '') in line.replace('(', '').replace(')', '').replace('-', '').replace(' ', ''):
-                                                    if "Primary Phone" in line or "primary" in line.lower():
-                                                        phones["primary"] = phone
-                                                        primary_found = True
-                                                        print(f"    👑 Found designated primary phone: {phone}")
-                                                        break
-                                            if primary_found:
-                                                break
+                                        if phone != phones["primary"]:
+                                            phones["secondary"] = phone
+                                            break
 
-                                    # If no explicit primary found, use first phone as primary
-                                    if not primary_found and cleaned_phones:
-                                        phones["primary"] = cleaned_phones[0]
-                                        print(f"    📞 Using first phone as primary: {cleaned_phones[0]}")
-
-                                    # Set secondary phone
-                                    if len(cleaned_phones) > 1:
-                                        for phone in cleaned_phones:
-                                            if phone != phones["primary"]:
-                                                phones["secondary"] = phone
-                                                break
-
-                                    print(f"    📞 Found {len(cleaned_phones)} phone numbers from 'Last Known Phone Numbers' section")
-                                    for phone in cleaned_phones:
-                                        print(f"      📞 {phone}")
+                                print(f"    ✅ Found {len(cleaned_phones)} MOBILE phone numbers from 'Last Known Phone Numbers' section")
+                                for phone in cleaned_phones:
+                                    print(f"      📱 {phone}")
+                            else:
+                                print(f"    ⚠️ No MOBILE phones found in 'Last Known Phone Numbers' section")
                         else:
-                            print("    ⚠️ 'Last Known Phone Numbers' section not found, trying broader search...")
-
-                            # Fallback: look for phone numbers in the entire card but with more specific filtering
-                            phone_pattern = r'\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}'
-                            phone_matches = re.findall(phone_pattern, card_text)
-
-                            if phone_matches:
-                                # Clean up phone numbers
-                                cleaned_phones = []
-                                for phone in phone_matches:
-                                    # Standardize format to (XXX) XXX-XXXX
-                                    digits = re.sub(r'\D', '', phone)
-                                    if len(digits) == 10:
-                                        formatted = f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
-                                        if formatted not in cleaned_phones:
-                                            cleaned_phones.append(formatted)
-
-                                # Limit to first 2 phones to avoid pulling all associated numbers
-                                cleaned_phones = cleaned_phones[:2]
-                                phones["all"] = cleaned_phones
-
-                                if cleaned_phones:
-                                    phones["primary"] = cleaned_phones[0]
-                                    if len(cleaned_phones) > 1:
-                                        phones["secondary"] = cleaned_phones[1]
-
-                                print(f"    � Fallback: Found {len(cleaned_phones)} phone numbers (limited to 2)")
-                                for phone in cleaned_phones:
-                                    print(f"      📞 {phone}")
+                            print("    ⚠️ 'Last Known Phone Numbers' section not found - CANNOT FILTER FOR MOBILE!")
+                            print("    ⚠️ Skipping this record (no mobile filtering possible without proper section)")
+                            # Don't use fallback methods - they can't distinguish mobile from landline
 
                     except Exception as e:
-                        print(f"    ⚠️ Error extracting phones from specific section: {e}")
-                        # Ultimate fallback to original method but limited
-                        phone_pattern = r'\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}'
-                        phone_matches = re.findall(phone_pattern, card_text)
+                        print(f"    ❌ Error extracting phones: {e}")
+                        print(f"    ⚠️ Cannot extract mobile phones - skipping this record")
+                        # Don't use fallback - can't distinguish mobile from landline without proper structure
 
-                        if phone_matches:
-                            cleaned_phones = []
-                            for phone in phone_matches[:2]:  # Limit to first 2
-                                digits = re.sub(r'\D', '', phone)
-                                if len(digits) == 10:
-                                    formatted = f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
-                                    if formatted not in cleaned_phones:
-                                        cleaned_phones.append(formatted)
-
-                            phones["all"] = cleaned_phones
-                            if cleaned_phones:
-                                phones["primary"] = cleaned_phones[0]
-                                if len(cleaned_phones) > 1:
-                                    phones["secondary"] = cleaned_phones[1]
-
-                            # Fallback: look for phone numbers in the entire card but with more specific filtering
-                            phone_pattern = r'\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}'
-                            phone_matches = re.findall(phone_pattern, card_text)
-
-                            if phone_matches:
-                                # Clean up phone numbers
-                                cleaned_phones = []
-                                for phone in phone_matches:
-                                    # Standardize format to (XXX) XXX-XXXX
-                                    digits = re.sub(r'\D', '', phone)
-                                    if len(digits) == 10:
-                                        formatted = f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
-                                        if formatted not in cleaned_phones:
-                                            cleaned_phones.append(formatted)
-
-                                # Limit to first 2 phones to avoid pulling all associated numbers
-                                cleaned_phones = cleaned_phones[:2]
-                                phones["all"] = cleaned_phones
-
-                                if cleaned_phones:
-                                    phones["primary"] = cleaned_phones[0]
-                                    if len(cleaned_phones) > 1:
-                                        phones["secondary"] = cleaned_phones[1]
-
-                                print(f"    📞 Fallback: Found {len(cleaned_phones)} phone numbers (limited to 2)")
-                                for phone in cleaned_phones:
-                                    print(f"      📞 {phone}")
-
-                    except Exception as e:
-                        print(f"    ⚠️ Error extracting phones from specific section: {e}")
-                        # Ultimate fallback to original method but limited
-                        phone_pattern = r'\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}'
-                        phone_matches = re.findall(phone_pattern, card_text)
-
-                        if phone_matches:
-                            cleaned_phones = []
-                            for phone in phone_matches[:2]:  # Limit to first 2
-                                digits = re.sub(r'\D', '', phone)
-                                if len(digits) == 10:
-                                    formatted = f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
-                                    if formatted not in cleaned_phones:
-                                        cleaned_phones.append(formatted)
-
-                            phones["all"] = cleaned_phones
-                            if cleaned_phones:
-                                phones["primary"] = cleaned_phones[0]
-                                if len(cleaned_phones) > 1:
-                                    phones["secondary"] = cleaned_phones[1]
-
-                    # Return the data if we found phone numbers
+                    # Return the data if we found MOBILE phone numbers
                     if phones["all"]:
                         return {
                             "name": f"{target_first_name} {target_last_name}",
@@ -1239,14 +1164,14 @@ class ZabaSearchExtractor:
                             "total_phones": len(phones["all"])
                         }
                     else:
-                        print(f"    ❌ No phone numbers found in result #{i+1}")
+                        print(f"    ❌ No MOBILE phone numbers found in result #{i+1}")
                         continue
 
                 except Exception as e:
                     print(f"    ❌ Error processing card #{i+1}: {e}")
                     continue
 
-            print("  ❌ No matching records with phone numbers found")
+            print("  ❌ No matching records with MOBILE phone numbers found")
             return None
 
         except Exception as e:
