@@ -1099,92 +1099,59 @@ class ZabaSearchExtractor:
                         if last_known_section:
                             print("    🎯 Found 'Last Known Phone Numbers' section")
 
-                            # Simple approach: Get the entire card text and find ALL phones with their types
-                            # Look for ALL h4 elements (each h4 contains one phone number)
+                            # SIMPLE & FAST: Get all h4 headings in the card that contain phone numbers
+                            # Structure: h3 "Last Known Phone Numbers" → generic → generic → h4 + paragraph (type)
                             all_h4s = await card.query_selector_all('h4')
                             phone_pattern = r'\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}'
-
                             mobile_phones = []
-                            found_last_known_section = False
 
-                            print(f"    🔍 Checking {len(all_h4s)} h4 elements for phone numbers...")
+                            # Get full card text once for position checking
+                            card_text = await card.inner_text()
+                            last_known_pos = card_text.find("Last Known Phone Numbers")
 
                             for h4 in all_h4s:
                                 try:
                                     h4_text = await h4.inner_text()
 
-                                    # Check if this h4 contains a phone number
+                                    # Must contain phone number
                                     phone_match = re.search(phone_pattern, h4_text)
                                     if not phone_match:
                                         continue
 
-                                    print(f"    🔍 DEBUG: Found h4 with phone: {h4_text[:50]}")
-
-                                    # Simple check: Get all text from card and check if "Last Known Phone Numbers" appears before this phone
-                                    card_full_text = await card.inner_text()
-                                    # Find position of "Last Known Phone Numbers" and this phone number in card text
-                                    last_known_pos = card_full_text.find("Last Known Phone Numbers")
-                                    phone_pos = card_full_text.find(h4_text)
-
-                                    if last_known_pos >= 0 and phone_pos > last_known_pos:
-                                        # This phone appears AFTER "Last Known Phone Numbers" section - include it
-                                        found_last_known_section = True
-                                        print(f"    ✅ DEBUG: Phone is in Last Known section")
-                                    else:
-                                        print(f"    ⚠️ DEBUG: Phone is NOT in Last Known section (appears before it)")
+                                    # Must appear AFTER "Last Known Phone Numbers" in card text
+                                    phone_pos = card_text.find(h4_text)
+                                    if last_known_pos < 0 or phone_pos < last_known_pos:
                                         continue
 
-                                    # Get next sibling element for type info (mobile/landline/voip)
-                                    try:
-                                        next_sibling_text = await h4.evaluate('(el) => el.nextElementSibling ? el.nextElementSibling.textContent : ""')
-                                    except:
-                                        next_sibling_text = ""
+                                    # Get next sibling paragraph for type (landline/mobile/voip)
+                                    type_text = await h4.evaluate('(el) => el.nextElementSibling ? el.nextElementSibling.textContent : ""')
 
-                                    # Combine for checking
-                                    element_text = h4_text + " " + next_sibling_text
+                                    # Skip landlines
+                                    if 'landline' in type_text.lower():
+                                        print(f"    🏠 Skipping LANDLINE: {phone_match.group()}")
+                                        continue
 
-                                    # Extract phone number from h4_text
-                                    phone_raw = phone_match.group()
-
-                                    # Standardize format to (XXX) XXX-XXXX
-                                    digits = re.sub(r'\D', '', phone_raw)
+                                    # Extract and format phone
+                                    digits = re.sub(r'\D', '', phone_match.group())
                                     if len(digits) == 10:
                                         formatted_phone = f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
+                                        is_primary = "primary phone" in h4_text.lower()
 
-                                        # Skip ONLY landlines, accept everything else (case-insensitive)
-                                        element_text_lower = element_text.lower()
+                                        if formatted_phone not in [p['number'] for p in mobile_phones]:
+                                            mobile_phones.append({'number': formatted_phone, 'is_primary': is_primary})
 
-                                        # Check if it's a landline
-                                        is_landline = 'landline' in element_text_lower
+                                            # Log type
+                                            phone_type = "MOBILE/VOIP"
+                                            if 'mobile' in type_text.lower():
+                                                phone_type = "MOBILE"
+                                            elif 'voip' in type_text.lower():
+                                                phone_type = "VOIP"
+                                            elif 'wireless' in type_text.lower():
+                                                phone_type = "WIRELESS"
 
-                                        if not is_landline:
-                                            # Accept ALL non-landline phones (mobile, voip, wireless, cellular, or unknown)
-                                            # Check if it's marked as primary
-                                            is_primary = "primary phone" in element_text_lower
+                                            print(f"    📱 Found {phone_type} phone: {formatted_phone}" + (" (Primary)" if is_primary else ""))
 
-                                            if formatted_phone not in [p['number'] for p in mobile_phones]:
-                                                mobile_phones.append({
-                                                    'number': formatted_phone,
-                                                    'is_primary': is_primary
-                                                })
-
-                                                # Determine phone type for logging
-                                                phone_type = "MOBILE/VOIP"
-                                                if 'mobile' in element_text_lower:
-                                                    phone_type = "MOBILE"
-                                                elif 'voip' in element_text_lower:
-                                                    phone_type = "VOIP"
-                                                elif 'wireless' in element_text_lower:
-                                                    phone_type = "WIRELESS"
-                                                elif 'cellular' in element_text_lower:
-                                                    phone_type = "CELLULAR"
-
-                                                print(f"    📱 Found {phone_type} phone: {formatted_phone}" + (" (Primary)" if is_primary else ""))
-                                        else:
-                                            print(f"    🏠 Skipping LANDLINE: {formatted_phone}")
-
-                                except Exception as elem_error:
-                                    print(f"    ⚠️ Error processing phone h4: {elem_error}")
+                                except Exception as e:
                                     continue
 
                             # Process collected mobile phones
