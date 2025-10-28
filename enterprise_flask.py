@@ -1235,7 +1235,7 @@ def analyze():
                 'thread': processing_thread,
                 'stop_flag': stop_flag,
                 'type': 'phone',
-                'filename': filename,
+                'filename': os.path.basename(filepath) if 'filepath' in locals() else 'processing',
                 'started': time.time()
             }
 
