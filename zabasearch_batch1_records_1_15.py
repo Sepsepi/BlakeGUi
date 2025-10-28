@@ -1118,17 +1118,20 @@ class ZabaSearchExtractor:
                                     if not phone_match:
                                         continue
 
-                                    # Check if we're in or past the "Last Known Phone Numbers" section
-                                    # by checking previous h3 sibling
-                                    try:
-                                        prev_h3 = await h4.evaluate('(el) => {let prev = el.previousElementSibling; while(prev && prev.tagName !== "H3") prev = prev.previousElementSibling; return prev ? prev.textContent : "";}')
-                                        if "Last Known Phone Numbers" in str(prev_h3):
-                                            found_last_known_section = True
-                                    except:
-                                        pass
+                                    print(f"    🔍 DEBUG: Found h4 with phone: {h4_text[:50]}")
 
-                                    # Skip if not in Last Known section yet
-                                    if not found_last_known_section:
+                                    # Simple check: Get all text from card and check if "Last Known Phone Numbers" appears before this phone
+                                    card_full_text = await card.inner_text()
+                                    # Find position of "Last Known Phone Numbers" and this phone number in card text
+                                    last_known_pos = card_full_text.find("Last Known Phone Numbers")
+                                    phone_pos = card_full_text.find(h4_text)
+
+                                    if last_known_pos >= 0 and phone_pos > last_known_pos:
+                                        # This phone appears AFTER "Last Known Phone Numbers" section - include it
+                                        found_last_known_section = True
+                                        print(f"    ✅ DEBUG: Phone is in Last Known section")
+                                    else:
+                                        print(f"    ⚠️ DEBUG: Phone is NOT in Last Known section (appears before it)")
                                         continue
 
                                     # Get next sibling element for type info (mobile/landline/voip)
