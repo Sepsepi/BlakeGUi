@@ -154,8 +154,8 @@ class PhoneSearchPipeline:
                             else:
                                 batch_count = 15  # Large files: 15 batches (maximum parallel processing)
                                 self.logger.info("📊 Using 15 batches for large file (>30 records) - maximum parallelization")
-
-                            self.logger.info("🚀 Initiating multi-terminal batch processing...")
+                            
+                            self.logger.info("�🚀 Initiating multi-terminal batch processing...")
                             return self._process_in_batches(formatted_path, output_path, records_needing_processing, csv_path, batch_count)
                         else:
                             self.logger.info(f"📊 Standard processing: {records_needing_processing} records")
@@ -345,9 +345,10 @@ class PhoneSearchPipeline:
                         # Save the merged DataFrame
                         merged_df = merge_result.get('merged_df')
                         if merged_df is not None:
-                            # KEEP DirectName_Phone and IndirectName_Phone columns (needed by Radaris)
-                            # DO NOT drop these columns - Radaris checks them to avoid reprocessing
-                            merged_df.to_csv(output_path, index=False)
+                            # Remove DirectName_Phone columns from merged output
+                            columns_to_drop = ['DirectName_Phone_Primary', 'DirectName_Phone_Secondary', 'DirectName_Phone_All']
+                            final_merged_df = merged_df.drop(columns=[col for col in columns_to_drop if col in merged_df.columns])
+                            final_merged_df.to_csv(output_path, index=False)
                             self.logger.info(f"✅ Enhanced merged results saved to: {output_path}")
                         else:
                             # Fallback: Save combined results without enhanced merging
@@ -363,22 +364,6 @@ class PhoneSearchPipeline:
                     self.logger.info("📞 Falling back to combined batch results...")
                     # Fallback: Save combined results without enhanced merging
                     combined_df.to_csv(output_path, index=False)
-
-                # RADARIS FOLLOW-UP STAGE: Process records without phones
-                self.logger.info("\n" + "="*80)
-                self.logger.info("🔍 RADARIS FOLLOW-UP STAGE")
-                self.logger.info("="*80)
-                self.logger.info("📋 Checking for records that still need phone numbers...")
-
-                try:
-                    radaris_success = self._run_radaris_batches(output_path, original_csv_path)
-                    if radaris_success:
-                        self.logger.info("✅ Radaris follow-up stage completed successfully")
-                    else:
-                        self.logger.warning("⚠️ Radaris follow-up stage completed with warnings")
-                except Exception as radaris_error:
-                    self.logger.error(f"❌ Radaris follow-up stage failed: {radaris_error}")
-                    self.logger.info("📞 Continuing with ZabaSearch results only...")
 
                 # Cleanup batch files
                 for batch_file in batch_files:
@@ -740,11 +725,6 @@ class PhoneSearchPipeline:
                                 final_results_df = results_df.drop(columns=[col for col in columns_to_drop if col in results_df.columns])
                                 final_results_df.to_csv(output_path, index=False)
                                 self.logger.info(f"✅ ZabaSearch processing completed: {len(results_df)} results")
-
-                                # 🔍 RADARIS FOLLOW-UP: Try Radaris for records where ZabaSearch didn't find phones
-                                self.logger.info("🔄 Starting Radaris follow-up for records without phones...")
-                                self._run_radaris_followup(final_results_df, output_path, original_csv_path)
-
                                 return True
                             else:
                                 self.logger.warning("⚠️ ZabaSearch completed but no phone data found")
@@ -779,492 +759,96 @@ class PhoneSearchPipeline:
             self.logger.error(f"❌ ZabaSearch processing failed: {e}")
             return False
 
-    def _run_radaris_followup(self, df: pd.DataFrame, output_path: str, original_csv_path: str) -> bool:
+    def _run_radaris_fallback(self, df: pd.DataFrame, output_path: str) -> bool:
         """
-        Run Radaris processing for records where ZabaSearch didn't find phones
-
-        This runs AFTER ZabaSearch completes, targeting only records that still need phones.
-        Uses the same address matching logic as ZabaSearch for consistency.
+        Run Radaris processing as fallback when ZabaSearch fails
 
         Args:
-            df: DataFrame with ZabaSearch results
+            df: DataFrame to process
             output_path: Path for output file
-            original_csv_path: Path to original CSV for merging
 
         Returns:
             bool: True if processing completed successfully
         """
         try:
-            self.logger.info("🔍 Starting Radaris follow-up processing for records without phones...")
-
-            # Find records that still don't have phone numbers after ZabaSearch
-            records_needing_radaris = []
-
-            for idx, row in df.iterrows():
-                # Check if Primary_Phone is empty/missing
-                primary_phone = row.get('Primary_Phone', '')
-                has_phone = bool(str(primary_phone).strip()) and str(primary_phone) != 'nan'
-
-                if not has_phone:
-                    # This record needs Radaris
-                    records_needing_radaris.append(idx)
-
-            if not records_needing_radaris:
-                self.logger.info("✅ All records already have phone numbers - Radaris not needed")
-                return True
-
-            self.logger.info(f"📞 Found {len(records_needing_radaris)} records needing Radaris lookup")
+            self.logger.info("🔍 Starting Radaris fallback processing...")
 
             # Import Radaris module
             try:
                 import importlib.util
 
+                # Look for Radaris script
                 radaris_script = 'radaris_phone_scraper.py'
 
-                if not os.path.exists(radaris_script):
-                    self.logger.warning("⚠️ Radaris script not found, skipping Radaris processing")
-                    return True
+                if os.path.exists(radaris_script):
+                    spec = importlib.util.spec_from_file_location("radaris", radaris_script)
+                    if spec and spec.loader:
+                        radaris_module = importlib.util.module_from_spec(spec)
+                        spec.loader.exec_module(radaris_module)
+                        self.logger.info(f"✅ Loaded Radaris module: {radaris_script}")
 
-                spec = importlib.util.spec_from_file_location("radaris", radaris_script)
-                if spec and spec.loader:
-                    radaris_module = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(radaris_module)
-                    self.logger.info(f"✅ Loaded Radaris module: {radaris_script}")
+                        # Run the Radaris processing
+                        if hasattr(radaris_module, 'RadarisPhoneScraper'):
+                            self.logger.info("🤖 Running Radaris automation...")
 
-                    # Run the Radaris processing
-                    if hasattr(radaris_module, 'RadarisPhoneScraper'):
-                        self.logger.info("🤖 Running Radaris automation on remaining records...")
+                            # Create a temporary CSV for processing
+                            temp_csv = f"temp/temp_radaris_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+                            df.to_csv(temp_csv, index=False)
 
-                        # Create a temporary CSV with only records needing Radaris
-                        temp_csv = os.path.join(self.temp_folder, f"temp_radaris_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
-                        df_radaris = df.loc[records_needing_radaris].copy()
-                        df_radaris.to_csv(temp_csv, index=False)
+                            # Initialize Radaris scraper
+                            scraper = radaris_module.RadarisPhoneScraper(temp_csv, output_path)
 
-                        self.logger.info(f"📄 Created Radaris temp file with {len(df_radaris)} records")
+                            # Run async processing
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
 
-                        # Initialize Radaris scraper with our pipeline settings
-                        scraper = radaris_module.RadarisPhoneScraper(temp_csv, temp_csv)  # Process in-place
+                            try:
+                                # Run the scraper using process_csv method
+                                await_result = loop.run_until_complete(
+                                    scraper.process_csv(start_row=0, max_rows=len(df))
+                                )
 
-                        # Run async processing
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
+                                # Check if output file was created and updated
+                                if os.path.exists(scraper.output_path):
+                                    results_df = read_data_file(scraper.output_path)
+                                    # Copy results to desired output path
+                                    results_df.to_csv(output_path, index=False)
+                                    self.logger.info(f"✅ Radaris processing completed: {len(results_df)} results")
+                                    return True
+                                else:
+                                    self.logger.warning("⚠️ Radaris did not create output file")
+                                    # Save original data as fallback
+                                    df.to_csv(output_path, index=False)
+                                    return True
 
-                        try:
-                            # Run the scraper using process_csv method
-                            loop.run_until_complete(
-                                scraper.process_csv(start_row=0, max_rows=len(df_radaris))
-                            )
+                            finally:
+                                loop.close()
+                                # Clean up temp file
+                                if os.path.exists(temp_csv):
+                                    os.remove(temp_csv)
 
-                            # Read Radaris results
-                            if os.path.exists(temp_csv):
-                                radaris_results = pd.read_csv(temp_csv)
-                                self.logger.info(f"📊 Radaris processing completed: {len(radaris_results)} results")
-
-                                # Merge Radaris results back into main DataFrame
-                                phones_found = 0
-                                for idx, radaris_row in radaris_results.iterrows():
-                                    original_idx = records_needing_radaris[idx]
-
-                                    # Use Radaris phone columns (Phone_Primary, Phone_Secondary, Phone_All)
-                                    radaris_primary = radaris_row.get('Phone_Primary', '')
-                                    radaris_secondary = radaris_row.get('Phone_Secondary', '')
-                                    radaris_all = radaris_row.get('Phone_All', '')
-
-                                    if radaris_primary and str(radaris_primary).strip() and str(radaris_primary) != 'nan':
-                                        df.at[original_idx, 'Primary_Phone'] = radaris_primary
-                                        phones_found += 1
-                                        self.logger.info(f"  ✅ Row {original_idx}: Found phone via Radaris: {radaris_primary}")
-
-                                    if radaris_secondary and str(radaris_secondary).strip() and str(radaris_secondary) != 'nan':
-                                        df.at[original_idx, 'Secondary_Phone'] = radaris_secondary
-
-                                    # Store Radaris-specific metadata
-                                    if radaris_all and str(radaris_all).strip() and str(radaris_all) != 'nan':
-                                        df.at[original_idx, 'Radaris_Phone_All'] = radaris_all
-
-                                    address_match = radaris_row.get('Address_Match', '')
-                                    if address_match and str(address_match).strip():
-                                        df.at[original_idx, 'Radaris_Address_Match'] = address_match
-
-                                    search_status = radaris_row.get('Search_Status', '')
-                                    if search_status and str(search_status).strip():
-                                        df.at[original_idx, 'Radaris_Search_Status'] = search_status
-
-                                self.logger.info(f"🎉 Radaris found phones for {phones_found}/{len(records_needing_radaris)} remaining records")
-
-                                # Save updated results
-                                df.to_csv(output_path, index=False)
-                                self.logger.info(f"✅ Updated results saved to: {output_path}")
-
-                                return True
-                            else:
-                                self.logger.warning("⚠️ Radaris did not create output file")
-                                return True
-
-                        finally:
-                            loop.close()
-                            # Clean up temp file
-                            if os.path.exists(temp_csv):
-                                os.remove(temp_csv)
-
-                    else:
-                        self.logger.error("❌ RadarisPhoneScraper class not found in module")
-                        return True
+                        else:
+                            self.logger.error("❌ RadarisPhoneScraper class not found in module")
+                            # Save original data as fallback
+                            df.to_csv(output_path, index=False)
+                            return True
                 else:
-                    self.logger.error("❌ Failed to load Radaris module spec")
+                    self.logger.warning("⚠️ Radaris script not found, saving original data")
+                    # Save original data as fallback
+                    df.to_csv(output_path, index=False)
                     return True
 
             except Exception as e:
                 self.logger.error(f"❌ Failed to import/run Radaris module: {e}")
+                # Save original data as fallback
+                df.to_csv(output_path, index=False)
                 return True
 
         except Exception as e:
-            self.logger.error(f"❌ Radaris follow-up processing failed: {e}")
+            self.logger.error(f"❌ Radaris fallback processing failed: {e}")
+            # Save original data as final fallback
+            df.to_csv(output_path, index=False)
             return True
-
-    def _run_radaris_batches(self, output_path: str, original_csv_path: str) -> bool:
-        """
-        Run Radaris processing in batches for records where ZabaSearch didn't find phones
-
-        This creates 15 batches from records without phones and processes them with Radaris.
-        Uses the same batch processing pattern as ZabaSearch for consistency.
-
-        Args:
-            output_path: Path to the merged CSV file (after ZabaSearch)
-            original_csv_path: Path to original CSV for reference
-
-        Returns:
-            bool: True if processing completed successfully
-        """
-        try:
-            # Read the merged results
-            if not os.path.exists(output_path):
-                self.logger.error(f"❌ Output file not found: {output_path}")
-                return False
-
-            df = pd.read_csv(output_path)
-            self.logger.info(f"📊 Loaded {len(df)} records from merged results")
-
-            # Filter records that don't have phone numbers
-            records_without_phones = df[
-                (df['Primary_Phone'].isna()) |
-                (df['Primary_Phone'] == '') |
-                (df['Primary_Phone'].astype(str).str.strip() == '') |
-                (df['Primary_Phone'].astype(str) == 'nan')
-            ].copy()
-
-            if len(records_without_phones) == 0:
-                self.logger.info("✅ All records already have phone numbers - Radaris not needed")
-                return True
-
-            self.logger.info(f"📞 Found {len(records_without_phones)} records without phones")
-            self.logger.info(f"   🎯 {(len(records_without_phones)/len(df)*100):.1f}% of records need Radaris lookup")
-
-            # Create 15 batches (consistent with large batch processing)
-            batch_count = 15
-            self.logger.info(f"📦 Dividing into {batch_count} batches for Radaris processing")
-
-            # Create batch files in temp folder
-            batch_files = []
-            batch_outputs = []
-
-            for batch_num in range(batch_count):
-                # Calculate batch indices
-                batch_size = len(records_without_phones) // batch_count
-                start_idx = batch_num * batch_size
-
-                if batch_num == batch_count - 1:
-                    # Last batch gets remaining records
-                    end_idx = len(records_without_phones)
-                else:
-                    end_idx = start_idx + batch_size
-
-                batch_df = records_without_phones.iloc[start_idx:end_idx].copy()
-
-                if len(batch_df) == 0:
-                    continue
-
-                # Create batch file
-                batch_file = os.path.join(self.temp_folder, f"radaris_batch_{batch_num + 1}_of_{batch_count}.csv")
-                batch_output = os.path.join(self.temp_folder, f"radaris_batch_{batch_num + 1}_output.csv")
-
-                batch_df.to_csv(batch_file, index=False)
-                batch_files.append(batch_file)
-                batch_outputs.append(batch_output)
-
-                self.logger.info(f"   📄 Batch {batch_num + 1}: {len(batch_df)} records -> {os.path.basename(batch_file)}")
-
-            if not batch_files:
-                self.logger.warning("⚠️ No batches created")
-                return True
-
-            self.logger.info(f"\n🚀 Starting Radaris headless automation on {len(batch_files)} batches...")
-
-            # Run Radaris processing on batches
-            radaris_success = self._run_headless_radaris_batches(batch_files, batch_outputs)
-
-            if not radaris_success:
-                self.logger.warning("⚠️ Some Radaris batches failed - continuing with available results")
-
-            # Combine all Radaris batch results
-            # NOTE: Radaris modifies batch_file IN PLACE, not batch_output
-            radaris_results = []
-            successful_batches = 0
-
-            for batch_num, (batch_file, batch_output) in enumerate(zip(batch_files, batch_outputs), 1):
-                # Try batch_output first (in case implementation changes), then batch_file (actual location)
-                result_file = None
-                if os.path.exists(batch_output):
-                    result_file = batch_output
-                elif os.path.exists(batch_file):
-                    result_file = batch_file
-                    self.logger.info(f"   📂 Batch {batch_num}: Reading from batch file (modified in-place)")
-
-                if result_file:
-                    try:
-                        batch_df = pd.read_csv(result_file)
-                        radaris_results.append(batch_df)
-                        successful_batches += 1
-                        self.logger.info(f"   ✅ Batch {batch_num}: {len(batch_df)} results loaded")
-                    except Exception as e:
-                        self.logger.warning(f"   ⚠️ Batch {batch_num}: Failed to read results - {e}")
-                else:
-                    self.logger.warning(f"   ⚠️ Batch {batch_num}: No result file found")
-
-            if not radaris_results:
-                self.logger.warning("⚠️ No Radaris results to merge")
-                return True
-
-            # Combine all Radaris results
-            combined_radaris_df = pd.concat(radaris_results, ignore_index=True)
-            self.logger.info(f"📊 Combined {len(combined_radaris_df)} Radaris results from {successful_batches} batches")
-
-            # Merge Radaris results back into main DataFrame
-            # OPTIMIZED: Build lookup dictionaries first to avoid O(n*m) complexity
-            phones_found = 0
-
-            # Build fast lookup dictionaries for both prefixes (O(n) instead of O(n*m))
-            lookup_dicts = {}
-            for prefix in ['DirectName', 'IndirectName']:
-                name_col = f"{prefix}_Cleaned"
-                address_col = f"{prefix}_Address"
-
-                # Create dictionary: (name, address) -> row_index
-                lookup_dicts[prefix] = {}
-                for idx, row in df.iterrows():
-                    name = row.get(name_col, '')
-                    addr = row.get(address_col, '')
-                    if name and addr:  # Only add valid entries
-                        # Convert to string and strip for consistent matching
-                        key = (str(name).strip(), str(addr).strip())
-                        lookup_dicts[prefix][key] = idx
-
-            self.logger.info(f"📇 Built lookup indexes: {sum(len(d) for d in lookup_dicts.values())} entries")
-
-            # Now merge using fast dictionary lookups (O(k) where k = Radaris records)
-            for _, radaris_row in combined_radaris_df.iterrows():
-                for prefix in ['DirectName', 'IndirectName']:
-                    name_col = f"{prefix}_Cleaned"
-                    address_col = f"{prefix}_Address"
-                    phone_col = f"{prefix}_Phone_Primary"
-
-                    # Get values from Radaris row
-                    full_name = radaris_row.get(name_col, '')
-                    address = radaris_row.get(address_col, '')
-                    radaris_phone = radaris_row.get(phone_col, '')
-
-                    # Skip if no data for this prefix
-                    if not full_name or not address:
-                        continue
-
-                    # Fast O(1) dictionary lookup instead of O(n) mask operation
-                    key = (str(full_name).strip(), str(address).strip())
-                    idx = lookup_dicts[prefix].get(key)
-
-                    if idx is not None:
-                        # Update phone from Radaris if found
-                        if radaris_phone and str(radaris_phone).strip() and str(radaris_phone) != 'nan':
-                            # Update the specific prefix phone column
-                            df.at[idx, phone_col] = radaris_phone
-
-                            # Also update Primary_Phone if not already set
-                            if pd.isna(df.at[idx, 'Primary_Phone']) or not str(df.at[idx, 'Primary_Phone']).strip():
-                                df.at[idx, 'Primary_Phone'] = radaris_phone
-
-                            phones_found += 1
-                            self.logger.info(f"  📞 Updated {phone_col} for {full_name} at {address}")
-
-            self.logger.info(f"🎉 Radaris found phones for {phones_found}/{len(records_without_phones)} records")
-            self.logger.info(f"   📈 Success rate: {(phones_found/len(records_without_phones)*100):.1f}%")
-
-            # Clean up DirectName/IndirectName phone columns from FINAL output (keep only Primary_Phone and Secondary_Phone)
-            # These columns were kept during processing for Radaris to check, but now we remove them for cleaner output
-            columns_to_drop = [
-                'DirectName_Phone_Primary', 'DirectName_Phone_Secondary', 'DirectName_Phone_All',
-                'IndirectName_Phone_Primary', 'IndirectName_Phone_Secondary', 'IndirectName_Phone_All'
-            ]
-            final_df = df.drop(columns=[col for col in columns_to_drop if col in df.columns])
-
-            # Save updated results with clean columns
-            final_df.to_csv(output_path, index=False)
-            self.logger.info(f"✅ Updated results saved to: {output_path}")
-            self.logger.info(f"🧹 Removed {len([c for c in columns_to_drop if c in df.columns])} internal columns for cleaner output")
-
-            # Cleanup Radaris batch files
-            for batch_file in batch_files:
-                if os.path.exists(batch_file):
-                    os.remove(batch_file)
-            for batch_output in batch_outputs:
-                if os.path.exists(batch_output):
-                    os.remove(batch_output)
-
-            self.logger.info("🧹 Radaris batch files cleaned up")
-
-            return True
-
-        except Exception as e:
-            self.logger.error(f"❌ Radaris batch processing failed: {e}")
-            import traceback
-            self.logger.error(traceback.format_exc())
-            return False
-
-    def _run_headless_radaris_batches(self, batch_files: list, batch_outputs: list) -> bool:
-        """
-        Run Radaris processing on multiple batches using headless automation with THREADING (SAME AS ZABA)
-
-        Args:
-            batch_files: List of batch file paths to process
-            batch_outputs: List of output file paths for results
-
-        Returns:
-            bool: True if all batches processed successfully
-        """
-        try:
-            import threading
-            import time
-
-            def process_radaris_batch(batch_file, output_path, batch_num):
-                """Process a single Radaris batch file"""
-                try:
-                    self.logger.info(f"   🖥️ Radaris Batch {batch_num}: Starting processing...")
-
-                    # Import and use radaris module directly
-                    import importlib.util
-
-                    # Load radaris module
-                    radaris_script = 'radaris_phone_scraper.py'
-                    if os.path.exists(radaris_script):
-                        spec = importlib.util.spec_from_file_location("radaris", radaris_script)
-                        if spec and spec.loader:
-                            radaris_module = importlib.util.module_from_spec(spec)
-                            spec.loader.exec_module(radaris_module)
-
-                            if hasattr(radaris_module, 'RadarisPhoneScraper'):
-                                # Create scraper instance (just for accessing the session method)
-                                scraper = radaris_module.RadarisPhoneScraper(
-                                    csv_path=batch_file,
-                                    output_path=output_path,
-                                    headless=True
-                                )
-
-                                # Run async processing with SESSION-BASED METHOD (SAME AS ZABA)
-                                # Each record gets its own browser session for maximum stealth
-                                import asyncio
-
-                                async def run_radaris_batch():
-                                    try:
-                                        # Use process_csv_with_sessions - 1 record = 1 browser session
-                                        await scraper.process_csv_with_sessions(batch_file)
-                                    except Exception as e:
-                                        self.logger.error(f"   ❌ Radaris Batch {batch_num}: Processing failed: {e}")
-                                        raise
-
-                                # Run the async processing
-                                try:
-                                    asyncio.run(run_radaris_batch())
-                                except Exception as e:
-                                    self.logger.error(f"   ❌ Radaris Batch {batch_num}: Exception: {e}")
-                                    return False
-
-                                # Results are saved directly to batch_file by process_csv_with_sessions
-                                # Copy to output if different
-                                if batch_file != output_path and os.path.exists(batch_file):
-                                    import shutil
-                                    shutil.copy2(batch_file, output_path)
-                                    self.logger.info(f"   ✅ Radaris Batch {batch_num}: Results saved to {output_path}")
-                                    return True
-                                elif os.path.exists(output_path):
-                                    self.logger.info(f"   ✅ Radaris Batch {batch_num}: Processing completed")
-                                    return True
-                                else:
-                                    self.logger.error(f"   ❌ Radaris Batch {batch_num}: No results generated")
-                                    return False
-
-                            else:
-                                self.logger.error(f"   ❌ Radaris Batch {batch_num}: RadarisPhoneScraper class not found")
-                                return False
-                        else:
-                            self.logger.error(f"   ❌ Radaris Batch {batch_num}: Failed to load module")
-                            return False
-                    else:
-                        self.logger.error(f"   ❌ Radaris Batch {batch_num}: {radaris_script} not found")
-                        return False
-
-                except Exception as e:
-                    self.logger.error(f"   ❌ Radaris Batch {batch_num} failed: {e}")
-                    import traceback
-                    self.logger.error(traceback.format_exc())
-                    return False
-
-            # Create and start threads with staggered starts (SAME AS ZABA)
-            threads = []
-            results = {}
-
-            self.logger.info(f"🚀 Starting {len(batch_files)} Radaris batches with staggered proxy sessions (PARALLEL THREADING)...")
-
-            for i, (batch_file, output_path) in enumerate(zip(batch_files, batch_outputs)):
-                def run_batch(bf=batch_file, op=output_path, bn=i+1):
-                    results[bn] = process_radaris_batch(bf, op, bn)
-
-                thread = threading.Thread(target=run_batch)
-                threads.append(thread)
-                thread.start()
-
-                # Staggered start: 2 second delay between batches to prevent proxy conflicts (SAME AS ZABA)
-                if i < len(batch_files) - 1:  # Don't delay after the last one
-                    self.logger.info(f"   ⏸️ Waiting 2 seconds before starting Radaris batch {i+2} to prevent proxy conflicts...")
-                    time.sleep(2)
-
-            # Wait for all threads to complete
-            self.logger.info("⏳ Waiting for all Radaris batches to complete...")
-            for i, thread in enumerate(threads):
-                thread.join()
-                self.logger.info(f"   ✅ Radaris Batch {i+1} thread completed")
-
-            # Check results
-            all_success = all(results.values())
-            if all_success:
-                self.logger.info("✅ All Radaris headless batches completed successfully")
-            else:
-                failed_batches = [k for k, v in results.items() if not v]
-                self.logger.warning(f"⚠️ Some Radaris batches failed: {failed_batches}")
-
-            return all_success or any(results.values())  # Return True if at least one succeeded
-
-        except Exception as e:
-            self.logger.error(f"❌ Radaris headless batch processing failed: {e}")
-            import traceback
-            self.logger.error(traceback.format_exc())
-            return False
-
-    def _run_radaris_fallback(self, df: pd.DataFrame, output_path: str) -> bool:
-        """
-        DEPRECATED: Use _run_radaris_followup instead
-
-        This is kept for backward compatibility but redirects to the new method
-        """
-        self.logger.warning("⚠️ Using deprecated _run_radaris_fallback - consider using _run_radaris_followup")
-        return self._run_radaris_followup(df, output_path, "")
 
     def analyze_csv(self, csv_path: str) -> dict:
         """
