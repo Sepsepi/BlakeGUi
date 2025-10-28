@@ -1085,14 +1085,14 @@ class ZabaSearchExtractor:
                                         if len(digits) == 10:
                                             formatted_phone = f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
 
-                                            # NEW: Check if phone type is MOBILE (case-insensitive)
+                                            # NEW: Skip ONLY landlines, accept everything else (case-insensitive)
                                             element_text_lower = element_text.lower()
 
-                                            # Look for "mobile", "wireless", "cellular", or "voip" indicators
-                                            is_mobile = any(indicator in element_text_lower for indicator in ['mobile', 'wireless', 'cellular', 'voip'])
+                                            # Check if it's a landline
                                             is_landline = 'landline' in element_text_lower
 
-                                            if is_mobile and not is_landline:
+                                            if not is_landline:
+                                                # Accept ALL non-landline phones (mobile, voip, wireless, cellular, or unknown)
                                                 # Check if it's marked as primary
                                                 is_primary = "primary phone" in element_text_lower
 
@@ -1101,11 +1101,21 @@ class ZabaSearchExtractor:
                                                         'number': formatted_phone,
                                                         'is_primary': is_primary
                                                     })
-                                                    print(f"    📱 Found MOBILE phone: {formatted_phone}" + (" (Primary)" if is_primary else ""))
-                                            elif is_landline:
-                                                print(f"    🏠 Skipping LANDLINE: {formatted_phone}")
+
+                                                    # Determine phone type for logging
+                                                    phone_type = "MOBILE/VOIP"
+                                                    if 'mobile' in element_text_lower:
+                                                        phone_type = "MOBILE"
+                                                    elif 'voip' in element_text_lower:
+                                                        phone_type = "VOIP"
+                                                    elif 'wireless' in element_text_lower:
+                                                        phone_type = "WIRELESS"
+                                                    elif 'cellular' in element_text_lower:
+                                                        phone_type = "CELLULAR"
+
+                                                    print(f"    📱 Found {phone_type} phone: {formatted_phone}" + (" (Primary)" if is_primary else ""))
                                             else:
-                                                print(f"    ❓ Unknown type for: {formatted_phone} - skipping")
+                                                print(f"    🏠 Skipping LANDLINE: {formatted_phone}")
 
                                 except Exception as elem_error:
                                     continue
