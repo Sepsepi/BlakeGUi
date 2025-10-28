@@ -1014,32 +1014,22 @@ class ZabaSearchExtractor:
             # New approach: Look for the h2 heading with the person's name
             # Current structure: <h2><link>Brandon Welty</link></h2>
 
-            # Try multiple selectors to find person data
+            # Try .person class first (old structure)
             person_cards = await page.query_selector_all('.person')
 
-            # If .person doesn't exist, try finding by h2 headings (new structure)
+            # If .person doesn't exist, use the whole page body as the card (new structure)
             if not person_cards:
-                print("  🔍 .person class not found, trying h2 name headings (new ZabaSearch structure)...")
-                # Look for h2 elements that might contain the person name
-                h2_elements = await page.query_selector_all('h2')
-
-                # Filter to only h2s that contain the target name
-                person_cards = []
-                for h2 in h2_elements:
-                    h2_text = await h2.inner_text()
-                    if (target_first_name.lower() in h2_text.lower() and
-                        target_last_name.lower() in h2_text.lower()):
-                        # Get the parent container that has all the person data
-                        parent = await h2.eval_handle('element => element.closest("div")')
-                        if parent:
-                            person_cards.append(parent.as_element())
-                            print(f"  ✅ Found person data via h2 heading: {h2_text}")
+                print("  🔍 .person class not found, using page body (new ZabaSearch structure)...")
+                body = await page.query_selector('body')
+                if body:
+                    person_cards = [body]
+                    print("  ✅ Using page body for extraction")
 
             if not person_cards:
-                print("  ❌ No person cards found with either selector")
+                print("  ❌ Cannot find page content")
                 return None
 
-            print(f"  ✅ Found {len(person_cards)} person result(s)")
+            print(f"  ✅ Found {len(person_cards)} result container(s)")
 
             for i, card in enumerate(person_cards):
                 print(f"  🔍 Checking result #{i+1}")
