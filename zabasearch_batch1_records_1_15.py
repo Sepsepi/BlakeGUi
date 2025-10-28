@@ -1037,6 +1037,8 @@ class ZabaSearchExtractor:
                     # Use JavaScript to find all divs that have both h2 and h3 (indicates full person profile)
                     person_containers = await page.evaluate('''() => {
                         const allDivs = Array.from(document.querySelectorAll('div'));
+                        console.log('Total divs:', allDivs.length);
+
                         const personDivs = allDivs.filter(div => {
                             // Must have h2 (name heading) AND h3 (section headings like "Last Known Phone Numbers")
                             const hasH2 = div.querySelector('h2') !== null;
@@ -1049,12 +1051,16 @@ class ZabaSearchExtractor:
                             return hasH2 && hasH3 && hasPhoneOrAddress;
                         });
 
+                        console.log('Person divs found:', personDivs.length);
+
                         // Return indices of matching divs
                         return personDivs.map(div => {
                             const allDivsArray = Array.from(document.querySelectorAll('div'));
                             return allDivsArray.indexOf(div);
                         });
                     }''')
+
+                    print(f"  🔍 DEBUG: JavaScript returned {len(person_containers) if person_containers else 0} container indices")
 
                     if person_containers and len(person_containers) > 0:
                         print(f"  ✅ Found {len(person_containers)} person container(s) in new structure")
