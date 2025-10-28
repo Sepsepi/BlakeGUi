@@ -1047,7 +1047,8 @@ class ZabaSearchExtractor:
 
                             // Walk up the DOM to find a container with substantial content
                             while (parent && parent.tagName !== 'BODY') {
-                                const text = parent.innerText || '';
+                                // Use textContent (works without CSS) instead of innerText
+                                const text = parent.textContent || '';
                                 const wordCount = text.split(/\\s+/).length;
 
                                 // Person container should have:
