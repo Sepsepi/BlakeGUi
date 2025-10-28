@@ -956,6 +956,22 @@ class ZabaSearchExtractor:
 
                 # Cloudflare protection removed - proceeding to data extraction
 
+                # Check if we got a 404 error page
+                page_title = await page.title()
+                page_url = page.url
+
+                if "404" in page_title or "not found" in page_title.lower():
+                    print(f"  ⚠️ Got 404 error page - city '{city}' not found in ZabaSearch")
+
+                    # If we searched with a city and got 404, retry without city
+                    if city and attempt == 0:
+                        print(f"  🔄 Retrying search without city filter...")
+                        city = ""  # Clear city for retry
+                        continue
+                    else:
+                        print(f"  ❌ Person not found in ZabaSearch database")
+                        return None
+
                 # Try to extract data directly
                 print(f"  📊 Attempting to extract person data...")
                 result = await self.extract_person_data(page, first_name, last_name, target_address)
