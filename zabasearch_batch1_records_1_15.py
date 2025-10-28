@@ -1032,36 +1032,44 @@ class ZabaSearchExtractor:
             if not person_cards:
                 print("  🔍 .person class not found, searching for individual person containers...")
 
-                # New ZabaSearch structure: Each person is in a div containing h2 (name) + h3 sections
-                # Use JavaScript to find all divs that have both h2 and h3 (indicates full person profile)
-                person_containers = await page.evaluate('''() => {
-                    const allDivs = Array.from(document.querySelectorAll('div'));
-                    const personDivs = allDivs.filter(div => {
-                        // Must have h2 (name heading) AND h3 (section headings like "Last Known Phone Numbers")
-                        const hasH2 = div.querySelector('h2') !== null;
-                        const hasH3 = div.querySelector('h3') !== null;
-                        // Must contain phone or address sections
-                        const text = div.innerText || '';
-                        const hasPhoneOrAddress = text.includes('Last Known Phone Numbers') ||
-                                                   text.includes('Last Known Address') ||
-                                                   text.includes('Associated Phone Numbers');
-                        return hasH2 && hasH3 && hasPhoneOrAddress;
-                    });
+                try:
+                    # New ZabaSearch structure: Each person is in a div containing h2 (name) + h3 sections
+                    # Use JavaScript to find all divs that have both h2 and h3 (indicates full person profile)
+                    person_containers = await page.evaluate('''() => {
+                        const allDivs = Array.from(document.querySelectorAll('div'));
+                        const personDivs = allDivs.filter(div => {
+                            // Must have h2 (name heading) AND h3 (section headings like "Last Known Phone Numbers")
+                            const hasH2 = div.querySelector('h2') !== null;
+                            const hasH3 = div.querySelector('h3') !== null;
+                            // Must contain phone or address sections
+                            const text = div.innerText || '';
+                            const hasPhoneOrAddress = text.includes('Last Known Phone Numbers') ||
+                                                       text.includes('Last Known Address') ||
+                                                       text.includes('Associated Phone Numbers');
+                            return hasH2 && hasH3 && hasPhoneOrAddress;
+                        });
 
-                    // Return indices of matching divs
-                    return personDivs.map(div => {
-                        const allDivsArray = Array.from(document.querySelectorAll('div'));
-                        return allDivsArray.indexOf(div);
-                    });
-                }''')
+                        // Return indices of matching divs
+                        return personDivs.map(div => {
+                            const allDivsArray = Array.from(document.querySelectorAll('div'));
+                            return allDivsArray.indexOf(div);
+                        });
+                    }''')
 
-                if person_containers and len(person_containers) > 0:
-                    print(f"  ✅ Found {len(person_containers)} person container(s) in new structure")
-                    # Get the actual elements
-                    all_divs = await page.query_selector_all('div')
-                    person_cards = [all_divs[idx] for idx in person_containers if idx < len(all_divs)]
-                else:
-                    print("  ⚠️ No person containers found, falling back to page body")
+                    if person_containers and len(person_containers) > 0:
+                        print(f"  ✅ Found {len(person_containers)} person container(s) in new structure")
+                        # Get the actual elements
+                        all_divs = await page.query_selector_all('div')
+                        person_cards = [all_divs[idx] for idx in person_containers if idx < len(all_divs)]
+                        print(f"  ✅ Successfully loaded {len(person_cards)} person card elements")
+                    else:
+                        print("  ⚠️ No person containers found, falling back to page body")
+                        body = await page.query_selector('body')
+                        if body:
+                            person_cards = [body]
+                except Exception as selector_error:
+                    print(f"  ⚠️ Error finding person containers: {selector_error}")
+                    print("  🔄 Falling back to page body")
                     body = await page.query_selector('body')
                     if body:
                         person_cards = [body]
