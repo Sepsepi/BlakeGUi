@@ -872,6 +872,7 @@ class ZabaSearchExtractor:
     async def search_person(self, page, first_name: str, last_name: str, target_address: str = "", city: str = "", state: str = "Florida") -> Optional[Dict]:
         """Search for a person on ZabaSearch with optimized processing"""
         max_retries = 3
+        retried_without_city = False  # Track if we already retried without city
 
         for attempt in range(max_retries):
             try:
@@ -964,10 +965,11 @@ class ZabaSearchExtractor:
                 if "404" in page_title or "not found" in page_title.lower():
                     print(f"  ⚠️ Got 404 error page - city '{city}' not found in ZabaSearch")
 
-                    # If we searched with a city and got 404, retry without city
-                    if city and attempt == 0:
+                    # If we searched with a city and got 404, retry without city (once)
+                    if city and not retried_without_city:
                         print(f"  🔄 Retrying search without city filter...")
                         city = ""  # Clear city for retry
+                        retried_without_city = True
                         continue
                     else:
                         print(f"  ❌ Person not found in ZabaSearch database")
