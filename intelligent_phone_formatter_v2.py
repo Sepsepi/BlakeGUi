@@ -703,16 +703,81 @@ Provide your analysis in the exact JSON format specified in the instructions.
             # Extract first and last name intelligently
             # Format: "FIRSTNAME LASTNAME" for most cases without commas
             if len(clean_words) >= 2:
-                # For 2 words: assume "FIRSTNAME LASTNAME" (most common format)
+                # For 2 words: need to detect if it's "FIRSTNAME LASTNAME" or "LASTNAME FIRSTNAME"
                 if len(clean_words) == 2:
-                    first_name = clean_words[0]  # First word = first name
-                    last_name = clean_words[1]   # Second word = last name
-                    return f"{first_name} {last_name}"
+                    # SMART DETECTION: Check if first word is a common surname
+                    # Common surnames that appear in property records
+                    common_surnames = {
+                        'SMITH', 'JOHNSON', 'WILLIAMS', 'BROWN', 'JONES', 'GARCIA', 'MILLER', 'DAVIS', 'RODRIGUEZ', 'MARTINEZ',
+                        'HERNANDEZ', 'LOPEZ', 'GONZALEZ', 'WILSON', 'ANDERSON', 'THOMAS', 'TAYLOR', 'MOORE', 'JACKSON', 'MARTIN',
+                        'LEE', 'PEREZ', 'THOMPSON', 'WHITE', 'HARRIS', 'SANCHEZ', 'CLARK', 'RAMIREZ', 'LEWIS', 'ROBINSON',
+                        'WALKER', 'YOUNG', 'ALLEN', 'KING', 'WRIGHT', 'SCOTT', 'TORRES', 'NGUYEN', 'HILL', 'FLORES',
+                        'GREEN', 'ADAMS', 'NELSON', 'BAKER', 'HALL', 'RIVERA', 'CAMPBELL', 'MITCHELL', 'CARTER', 'ROBERTS',
+                        'GOMEZ', 'PHILLIPS', 'EVANS', 'TURNER', 'DIAZ', 'PARKER', 'CRUZ', 'EDWARDS', 'COLLINS', 'REYES',
+                        'STEWART', 'MORRIS', 'MORALES', 'MURPHY', 'COOK', 'ROGERS', 'GUTIERREZ', 'ORTIZ', 'MORGAN', 'COOPER',
+                        'PETERSON', 'BAILEY', 'REED', 'KELLY', 'HOWARD', 'RAMOS', 'KIM', 'COX', 'WARD', 'RICHARDSON',
+                        'WATSON', 'BROOKS', 'CHAVEZ', 'WOOD', 'JAMES', 'BENNETT', 'GRAY', 'MENDOZA', 'RUIZ', 'HUGHES',
+                        'PRICE', 'ALVAREZ', 'CASTILLO', 'SANDERS', 'PATEL', 'MYERS', 'LONG', 'ROSS', 'FOSTER', 'JIMENEZ',
+                        # Additional common surnames from Florida property records
+                        'WELTY', 'DUTIL', 'SIVONGSAY', 'PEDERSEN', 'ALMANZAR', 'NUNEZ', 'MASTERS', 'SAUTEL', 'KRISHNA',
+                        'OCONNOR', 'MCDONALD', 'OLEARY', 'SULLIVAN', 'OBRIEN', 'KENNEDY', 'MURPHY', 'RYAN', 'WALSH', 'BYRNE'
+                    }
+
+                    # Common first names for additional validation
+                    common_first_names = {
+                        'JAMES', 'JOHN', 'ROBERT', 'MICHAEL', 'WILLIAM', 'DAVID', 'RICHARD', 'JOSEPH', 'THOMAS', 'CHARLES',
+                        'CHRISTOPHER', 'DANIEL', 'MATTHEW', 'ANTHONY', 'MARK', 'DONALD', 'STEVEN', 'PAUL', 'ANDREW', 'JOSHUA',
+                        'KENNETH', 'KEVIN', 'BRIAN', 'GEORGE', 'EDWARD', 'RONALD', 'TIMOTHY', 'JASON', 'JEFFREY', 'RYAN',
+                        'JACOB', 'GARY', 'NICHOLAS', 'ERIC', 'JONATHAN', 'STEPHEN', 'LARRY', 'JUSTIN', 'SCOTT', 'BRANDON',
+                        'BENJAMIN', 'SAMUEL', 'RAYMOND', 'GREGORY', 'ALEXANDER', 'PATRICK', 'JACK', 'DENNIS', 'JERRY', 'TYLER',
+                        'MARY', 'PATRICIA', 'JENNIFER', 'LINDA', 'BARBARA', 'ELIZABETH', 'SUSAN', 'JESSICA', 'SARAH', 'KAREN',
+                        'NANCY', 'LISA', 'BETTY', 'MARGARET', 'SANDRA', 'ASHLEY', 'KIMBERLY', 'EMILY', 'DONNA', 'MICHELLE',
+                        'DOROTHY', 'CAROL', 'AMANDA', 'MELISSA', 'DEBORAH', 'STEPHANIE', 'REBECCA', 'SHARON', 'LAURA', 'CYNTHIA',
+                        'NELSON', 'BRANDON', 'LEONARD', 'SANDRA', 'CHRISTINA', 'ART', 'JOSE', 'DONNALEE', 'JUAN', 'DEBRA'
+                    }
+
+                    first_word = clean_words[0]
+                    second_word = clean_words[1]
+
+                    # Detection logic with multiple heuristics:
+                    # 1. If first word is common surname AND second word is common first name → REVERSE
+                    # 2. If first word is common surname AND second word is NOT a surname → REVERSE
+                    # 3. Otherwise keep original order (FIRSTNAME LASTNAME)
+
+                    is_reversed_format = False
+
+                    # Check 1: First word is surname AND second word is first name
+                    if first_word in common_surnames and second_word in common_first_names:
+                        is_reversed_format = True
+                    # Check 2: First word is surname AND second word is not a common surname
+                    elif first_word in common_surnames and second_word not in common_surnames:
+                        is_reversed_format = True
+                    # Check 3: Second word is clearly a surname AND first word is not
+                    elif second_word in common_surnames and first_word not in common_surnames and first_word in common_first_names:
+                        is_reversed_format = False  # Normal order
+
+                    if is_reversed_format:
+                        # DETECTED: "LASTNAME FIRSTNAME" format - REVERSE IT
+                        first_name = second_word  # Second word is the first name
+                        last_name = first_word    # First word is the last name
+                        return f"{first_name} {last_name}"
+                    else:
+                        # Normal "FIRSTNAME LASTNAME" format
+                        first_name = first_word
+                        last_name = second_word
+                        return f"{first_name} {last_name}"
 
                 # For 3+ words: need to determine where last name ends and first name begins
                 # Common patterns:
                 # - "DE SAUTEL EDWARD J" → last name is "DE SAUTEL", first name is "EDWARD"
                 # - "MASTERS MICHAEL JAY" → last name is "MASTERS", first name is "MICHAEL"
+                # - "ALVAREZ NELSON JOSE" → last name is "ALVAREZ", first name is "NELSON" (reversed)
+
+                # Reuse the surname detection from above
+                common_surnames_3word = {
+                    'SMITH', 'JOHNSON', 'WILLIAMS', 'BROWN', 'JONES', 'GARCIA', 'MILLER', 'DAVIS', 'RODRIGUEZ', 'MARTINEZ',
+                    'ALVAREZ', 'WELTY', 'DUTIL', 'SIVONGSAY', 'PEDERSEN', 'ALMANZAR', 'NUNEZ', 'MASTERS', 'ALLEN', 'NELSON'
+                }
 
                 # Strategy: Look for common last name prefixes and handle multi-word last names
                 last_name_prefixes = ['DE', 'DEL', 'DER', 'LA', 'LE', 'VAN', 'VON', 'MAC', 'MC', 'O', 'ST', 'SAN', 'SANTA']
@@ -730,10 +795,18 @@ Provide your analysis in the exact JSON format specified in the instructions.
                     last_name = f"{clean_words[0]} {clean_words[1]}"
                     first_name = clean_words[2]
                     return f"{first_name} {last_name}"
-                else:
-                    # No prefix - single word last name
+                # SMART DETECTION for 3+ words: Check if first word is a surname
+                elif clean_words[0] in common_surnames_3word:
+                    # Likely "LASTNAME FIRSTNAME MIDDLE" format
+                    # Example: "ALVAREZ NELSON JOSE" → "NELSON ALVAREZ"
                     last_name = clean_words[0]
                     first_name = clean_words[1]
+                    return f"{first_name} {last_name}"
+                else:
+                    # No prefix - assume last word is last name (less common)
+                    # Example: "MICHAEL JAY MASTERS" → "MICHAEL MASTERS"
+                    last_name = clean_words[-1]  # Last word is surname
+                    first_name = clean_words[0]  # First word is first name
                     return f"{first_name} {last_name}"
 
             elif len(clean_words) == 1:
