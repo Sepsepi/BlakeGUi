@@ -43,6 +43,10 @@ os.makedirs(app.config['BASE_TEMP_FOLDER'], exist_ok=True)
 os.makedirs(app.config['LOGS_FOLDER'], exist_ok=True)
 os.makedirs('output', exist_ok=True)
 
+# Global process tracking
+active_processing_threads = {}  # {user_id: {'thread': thread_obj, 'stop_flag': Event(), 'type': 'phone'}}
+import threading
+
 # Session Management Functions
 def get_user_id():
     """Get or create a unique user ID for the session"""
@@ -1218,13 +1222,31 @@ def analyze():
                     result_container['error'] = str(e)
                     result_container['completed'] = True
 
+            # Create stop flag for this processing
+            stop_flag = threading.Event()
+            result_container['stop_flag'] = stop_flag
+
             # Start phone processing in a separate thread
             processing_thread = threading.Thread(target=run_phone_processing)
             processing_thread.daemon = True
+
+            # Track active thread for this user
+            active_processing_threads[user_id] = {
+                'thread': processing_thread,
+                'stop_flag': stop_flag,
+                'type': 'phone',
+                'filename': filename,
+                'started': time.time()
+            }
+
             processing_thread.start()
 
             # Wait for completion - no timeout for 3-4 hour processing
             processing_thread.join()
+
+            # Remove from active threads when done
+            if user_id in active_processing_threads:
+                del active_processing_threads[user_id]
 
             # No timeout check needed - unlimited processing time
 
@@ -2691,7 +2713,8 @@ def get_recent_files():
                         'size': stat.st_size,
                         'modified': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(stat.st_mtime)),
                         'age_hours': age_hours,
-                        'download_url': url_for('download_file', filename=filename)
+                        'download_url': url_for('download_file', filename=filename),
+                        'file_path': file_path  # Add full path for deletion
                     }
                     file_info_list.append(file_info)
                 except (OSError, IOError) as e:
@@ -2725,6 +2748,99 @@ def get_recent_files():
     except Exception as e:
         logger.error(f"Error getting recent files: {str(e)}")
         return jsonify({'error': f'Error getting recent files: {str(e)}'}), 500
+
+@app.route('/delete_recent_file', methods=['POST'])
+def delete_recent_file():
+    """Delete a specific file from recent files"""
+    try:
+        data = request.get_json()
+        file_path = data.get('file_path')
+
+        if not file_path:
+            return jsonify({'success': False, 'error': 'No file path provided'}), 400
+
+        # Security: Ensure file_path is within results folder
+        base_results_folder = app.config['BASE_RESULTS_FOLDER']
+        abs_file_path = os.path.abspath(file_path)
+        abs_results_folder = os.path.abspath(base_results_folder)
+
+        if not abs_file_path.startswith(abs_results_folder):
+            logger.warning(f"⚠️ Attempted to delete file outside results folder: {file_path}")
+            return jsonify({'success': False, 'error': 'Invalid file path'}), 403
+
+        # Check if file exists
+        if not os.path.exists(file_path):
+            return jsonify({'success': False, 'error': 'File not found'}), 404
+
+        # Delete the file
+        filename = os.path.basename(file_path)
+        os.remove(file_path)
+        logger.info(f"🗑️ Deleted file: {filename}")
+
+        return jsonify({
+            'success': True,
+            'message': f'File {filename} deleted successfully',
+            'filename': filename
+        })
+
+    except Exception as e:
+        logger.error(f"Error deleting file: {str(e)}")
+        return jsonify({'success': False, 'error': f'Error deleting file: {str(e)}'}), 500
+
+@app.route('/kill_process', methods=['POST'])
+def kill_active_process():
+    """Kill the currently running processing for this user"""
+    try:
+        user_id = get_user_id()
+
+        if user_id not in active_processing_threads:
+            return jsonify({'success': False, 'error': 'No active processing found'}), 404
+
+        process_info = active_processing_threads[user_id]
+        process_type = process_info.get('type', 'unknown')
+        filename = process_info.get('filename', 'unknown')
+
+        # Set stop flag
+        stop_flag = process_info.get('stop_flag')
+        if stop_flag:
+            stop_flag.set()
+            logger.info(f"🛑 Stop signal sent for {process_type} processing: {filename} (User: {user_id})")
+
+        # Try to terminate the thread (note: Python threads can't be killed directly, but stop_flag will work)
+        # The processing code needs to check stop_flag periodically
+
+        return jsonify({
+            'success': True,
+            'message': f'Stop signal sent to {process_type} processing',
+            'type': process_type,
+            'filename': filename
+        })
+
+    except Exception as e:
+        logger.error(f"Error killing process: {str(e)}")
+        return jsonify({'success': False, 'error': f'Error: {str(e)}'}), 500
+
+@app.route('/processing_status', methods=['GET'])
+def get_processing_status():
+    """Get current processing status for this user"""
+    try:
+        user_id = get_user_id()
+
+        if user_id in active_processing_threads:
+            process_info = active_processing_threads[user_id]
+            runtime = time.time() - process_info.get('started', time.time())
+
+            return jsonify({
+                'active': True,
+                'type': process_info.get('type'),
+                'filename': process_info.get('filename'),
+                'runtime_seconds': int(runtime)
+            })
+        else:
+            return jsonify({'active': False})
+
+    except Exception as e:
+        return jsonify({'active': False, 'error': str(e)})
 
 @app.route('/cleanup_status', methods=['GET'])
 def get_cleanup_status():

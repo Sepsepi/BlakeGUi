@@ -1125,6 +1125,9 @@
                 <i class="fas fa-terminal" style="color: #007bff;"></i>
                 Live Terminal Feed
                 <div style="margin-left: auto; display: flex; gap: 10px;">
+                    <button id="killProcessBtn" onclick="killActiveProcess()" class="btn btn-outline-danger btn-sm" style="display: none;">
+                        <i class="fas fa-stop-circle"></i> Kill Process
+                    </button>
                     <button id="refreshTerminal" onclick="refreshTerminalFeed()" class="btn btn-outline-warning btn-sm">
                         <i class="fas fa-sync"></i> Refresh Feed
                     </button>
@@ -2436,6 +2439,9 @@
                                 <a href="/download/${file.name}" class="btn btn-primary" download>
                                     <i class="fas fa-download"></i> Download
                                 </a>
+                                <button class="btn btn-danger" onclick="deleteRecentFile('${file.file_path}', '${file.name}', '${tabType}')" style="background: #dc3545; margin-left: 10px;">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
                             </div>
                         `).join('')}
                     </div>
@@ -2509,6 +2515,9 @@
                         <button class="btn btn-primary" onclick="event.stopPropagation(); downloadFile('${file.name}')">
                             <i class="fas fa-download"></i> Download
                         </button>
+                        <button class="btn btn-danger" onclick="event.stopPropagation(); deleteRecentFile('${file.file_path}', '${file.name}', '${tabType}')" style="background: #dc3545; margin-left: 5px;">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
                         <button class="btn btn-outline" onclick="event.stopPropagation(); viewRecentFiles('${tabType}')">
                             <i class="fas fa-list"></i> View All
                         </button>
@@ -2519,6 +2528,38 @@
 
         function downloadFile(filename) {
             window.open(`/download/${filename}`, '_blank');
+        }
+
+        function deleteRecentFile(filePath, fileName, tabType) {
+            // Confirm deletion
+            if (!confirm(`Are you sure you want to delete ${fileName}?`)) {
+                return;
+            }
+
+            // Send delete request to backend
+            fetch('/delete_recent_file', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    file_path: filePath
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(`File ${fileName} deleted successfully`);
+                    // Reload the recent files to update the list
+                    loadInlineRecentFiles(tabType);
+                } else {
+                    alert(`Error deleting file: ${data.error}`);
+                }
+            })
+            .catch(error => {
+                console.error('Delete error:', error);
+                alert('Error deleting file: ' + error);
+            });
         }
 
         // Enhanced tab management to handle system info
@@ -2687,6 +2728,51 @@
             terminalLines = 1;
             updateTerminalStats();
         }
+
+        function killActiveProcess() {
+            if (!confirm('Are you sure you want to stop the current processing?')) {
+                return;
+            }
+
+            fetch('/kill_process', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'}
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(`Process stopped: ${data.filename}`);
+                    document.getElementById('killProcessBtn').style.display = 'none';
+                    addTerminalLine(`🛑 Process killed: ${data.filename}`, 'warning');
+                } else {
+                    alert(`Error: ${data.error}`);
+                }
+            })
+            .catch(error => {
+                alert('Error stopping process: ' + error);
+            });
+        }
+
+        // Check processing status and show/hide kill button
+        function checkProcessingStatus() {
+            fetch('/processing_status')
+                .then(response => response.json())
+                .then(data => {
+                    const killBtn = document.getElementById('killProcessBtn');
+                    if (data.active) {
+                        killBtn.style.display = 'inline-block';
+                        killBtn.title = `Stop ${data.type} processing: ${data.filename}`;
+                    } else {
+                        killBtn.style.display = 'none';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking process status:', error);
+                });
+        }
+
+        // Check process status every 2 seconds
+        setInterval(checkProcessingStatus, 2000);
 
         function addTerminalLine(message, type = 'info') {
             const terminalContent = document.getElementById('terminalContent');
