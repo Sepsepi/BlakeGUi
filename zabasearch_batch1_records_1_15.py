@@ -1103,21 +1103,23 @@ class ZabaSearchExtractor:
 
                             print(f"    🔍 Found {len(all_h4s)} h4 elements total, checking for phones after 'Last Known Phone Numbers'...")
 
-                            for h4 in all_h4s:
+                            for idx, h4 in enumerate(all_h4s):
                                 try:
                                     h4_text = await h4.inner_text()
 
                                     # Must contain phone number
                                     phone_match = re.search(phone_pattern, h4_text)
                                     if not phone_match:
+                                        print(f"       h4 #{idx+1}: No phone number found, skipping")
                                         continue
 
                                     # Must appear AFTER "Last Known Phone Numbers" in card text
                                     phone_pos = card_text.find(h4_text)
                                     if last_known_pos < 0 or phone_pos < last_known_pos:
+                                        print(f"       h4 #{idx+1}: Phone appears before Last Known section, skipping")
                                         continue
 
-                                    print(f"    📞 Checking phone in Last Known section: {phone_match.group()}")
+                                    print(f"    📞 h4 #{idx+1}: Checking phone in Last Known section: {phone_match.group()}")
 
                                     # Get next sibling paragraph for type (landline/mobile/voip)
                                     type_text = await h4.evaluate('(el) => el.nextElementSibling ? el.nextElementSibling.textContent : ""')
