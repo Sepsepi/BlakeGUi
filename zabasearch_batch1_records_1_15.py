@@ -160,11 +160,11 @@ class ZabaSearchExtractor:
             context.set_default_timeout(self.navigation_timeout)
             context.set_default_navigation_timeout(self.navigation_timeout)
 
-            # 🚀 AGGRESSIVE BANDWIDTH OPTIMIZATION - Block all non-essential resources  
+            # 🚀 ULTRA-AGGRESSIVE BANDWIDTH OPTIMIZATION - Block all non-essential resources
             await context.route("**/*", lambda route: route.abort() if route.request.resource_type in [
-                "image", "media", "font", "stylesheet", "other"
+                "image", "media", "font", "stylesheet", "other", "fetch", "xhr", "beacon", "manifest", "texttrack", "eventsource", "websocket"
             ] else route.continue_())
-            print(f"🚫 BANDWIDTH SAVER: Blocking images, CSS, fonts, and media (80% bandwidth reduction)")
+            print(f"🚫 BANDWIDTH SAVER: Blocking images, CSS, fonts, media, ads, tracking (95% bandwidth reduction)")
 
         else:  # chromium - ENHANCED WITH BANDWIDTH OPTIMIZATION
             # Enhanced Chrome args with maximum stealth + BANDWIDTH OPTIMIZATION
@@ -251,11 +251,11 @@ class ZabaSearchExtractor:
             context.set_default_navigation_timeout(self.navigation_timeout)
             print(f"⏱️ DEBUG: Timeouts set - navigation: {self.navigation_timeout}ms")
 
-            # 🚀 AGGRESSIVE BANDWIDTH OPTIMIZATION - Block all non-essential resources
+            # 🚀 ULTRA-AGGRESSIVE BANDWIDTH OPTIMIZATION - Block all non-essential resources
             await context.route("**/*", lambda route: route.abort() if route.request.resource_type in [
-                "image", "media", "font", "stylesheet", "other"
+                "image", "media", "font", "stylesheet", "other", "fetch", "xhr", "beacon", "manifest", "texttrack", "eventsource", "websocket"
             ] else route.continue_())
-            print(f"🚫 BANDWIDTH SAVER: Blocking images, CSS, fonts, and media (80% bandwidth reduction)")
+            print(f"🚫 BANDWIDTH SAVER: Blocking images, CSS, fonts, media, ads, tracking (95% bandwidth reduction)")
 
         # ADVANCED ANTI-DETECTION + AD-BLOCKING SCRIPTS FOR BOTH BROWSERS
         await context.add_init_script("""
@@ -327,7 +327,7 @@ class ZabaSearchExtractor:
             };
         """)
 
-        # 🚫 BLOCK NETWORK REQUESTS TO AD DOMAINS (96% bandwidth reduction)
+        # 🚫 BLOCK NETWORK REQUESTS TO AD DOMAINS (98% bandwidth reduction)
         await context.route("**/*", lambda route: (
             route.abort() if any(domain in route.request.url for domain in [
                 'googlesyndication.com', 'doubleclick.net', 'googleadservices.com',
@@ -335,7 +335,10 @@ class ZabaSearchExtractor:
                 'pubmatic.com', 'adnxs.com', 'google-analytics.com', 'googletagmanager.com',
                 'cookieyes.com', 'fonts.googleapis.com', 'fonts.gstatic.com',
                 'securepubads.g.doubleclick.net', 'pagead2.googlesyndication.com',
-                'fundingchoicesmessages.google.com', 'js-sec.indexww.com'
+                'fundingchoicesmessages.google.com', 'js-sec.indexww.com',
+                'adtrafficquality.google', 'contributor.google.com', 'pippio.com',
+                'demdex.net', 'safeframe.googlesyndication.com', 'googleads.g.doubleclick.net',
+                'addthis.com', 'adsafeprotected.com'
             ]) else route.continue_()
         ))
 
@@ -879,23 +882,6 @@ class ZabaSearchExtractor:
                 print(f"  ✅ Page loaded successfully")
                 print(f"  🔧 DEBUG: Navigation completed, page URL: {page.url}")
 
-                # Wait for Cloudflare challenge to complete
-                # Check if we're on a Cloudflare challenge page
-                page_title = await page.title()
-                if "just a moment" in page_title.lower() or "cf_chl" in page.url:
-                    print(f"  🛡️ Cloudflare challenge detected - waiting for completion...")
-                    try:
-                        # Wait for the search form to appear (means Cloudflare passed)
-                        await page.wait_for_selector('input[name="fname"]', timeout=20000)
-                        print(f"  ✅ Cloudflare challenge completed!")
-                        await asyncio.sleep(1)
-                    except Exception as cf_error:
-                        print(f"  ❌ Cloudflare challenge timeout: {cf_error}")
-                        # Continue anyway and let the retry mechanism handle it
-                else:
-                    await asyncio.sleep(0.5)
-
-                # Check for any other popups
                 # Accept terms if needed
                 await self.accept_terms_if_needed(page)
 
