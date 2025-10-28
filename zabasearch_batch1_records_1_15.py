@@ -539,6 +539,17 @@ class ZabaSearchExtractor:
         for short, long in direction_mappings.items():
             normalized = normalized.replace(short, long)
 
+        # CITY ALIASES: Convert unofficial/unincorporated area names to official city names
+        # THE ACREAGE is an unincorporated area that ZabaSearch lists as Loxahatchee
+        city_aliases = {
+            'THE ACREAGE': 'LOXAHATCHEE',
+            'ACREAGE': 'LOXAHATCHEE'
+        }
+
+        # Replace city aliases
+        for unofficial, official in city_aliases.items():
+            normalized = normalized.replace(unofficial, official)
+
         # Common street type normalizations
         street_type_replacements = {
             ' STREET': ' ST',
