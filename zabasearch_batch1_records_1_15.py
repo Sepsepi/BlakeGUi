@@ -878,9 +878,22 @@ class ZabaSearchExtractor:
                 await page.goto('https://www.zabasearch.com', wait_until='domcontentloaded', timeout=12000)  # Optimized: 12s (was 22s)
                 print(f"  ✅ Page loaded successfully")
                 print(f"  🔧 DEBUG: Navigation completed, page URL: {page.url}")
-                await asyncio.sleep(0.5)  # Reduced from 1
 
-                # Cloudflare protection removed - proceeding directly
+                # Wait for Cloudflare challenge to complete
+                # Check if we're on a Cloudflare challenge page
+                page_title = await page.title()
+                if "just a moment" in page_title.lower() or "cf_chl" in page.url:
+                    print(f"  🛡️ Cloudflare challenge detected - waiting for completion...")
+                    try:
+                        # Wait for the search form to appear (means Cloudflare passed)
+                        await page.wait_for_selector('input[name="fname"]', timeout=20000)
+                        print(f"  ✅ Cloudflare challenge completed!")
+                        await asyncio.sleep(1)
+                    except Exception as cf_error:
+                        print(f"  ❌ Cloudflare challenge timeout: {cf_error}")
+                        # Continue anyway and let the retry mechanism handle it
+                else:
+                    await asyncio.sleep(0.5)
 
                 # Check for any other popups
                 # Accept terms if needed
