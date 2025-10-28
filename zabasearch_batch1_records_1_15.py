@@ -1028,19 +1028,49 @@ class ZabaSearchExtractor:
             # Try .person class first (old structure)
             person_cards = await page.query_selector_all('.person')
 
-            # If .person doesn't exist, use the whole page body as the card (new structure)
+            # If .person doesn't exist, find individual person containers (new structure)
             if not person_cards:
-                print("  🔍 .person class not found, using page body (new ZabaSearch structure)...")
-                body = await page.query_selector('body')
-                if body:
-                    person_cards = [body]
-                    print("  ✅ Using page body for extraction")
+                print("  🔍 .person class not found, searching for individual person containers...")
+
+                # New ZabaSearch structure: Each person is in a div containing h2 (name) + h3 sections
+                # Use JavaScript to find all divs that have both h2 and h3 (indicates full person profile)
+                person_containers = await page.evaluate('''() => {
+                    const allDivs = Array.from(document.querySelectorAll('div'));
+                    const personDivs = allDivs.filter(div => {
+                        // Must have h2 (name heading) AND h3 (section headings like "Last Known Phone Numbers")
+                        const hasH2 = div.querySelector('h2') !== null;
+                        const hasH3 = div.querySelector('h3') !== null;
+                        // Must contain phone or address sections
+                        const text = div.innerText || '';
+                        const hasPhoneOrAddress = text.includes('Last Known Phone Numbers') ||
+                                                   text.includes('Last Known Address') ||
+                                                   text.includes('Associated Phone Numbers');
+                        return hasH2 && hasH3 && hasPhoneOrAddress;
+                    });
+
+                    // Return indices of matching divs
+                    return personDivs.map(div => {
+                        const allDivsArray = Array.from(document.querySelectorAll('div'));
+                        return allDivsArray.indexOf(div);
+                    });
+                }''')
+
+                if person_containers and len(person_containers) > 0:
+                    print(f"  ✅ Found {len(person_containers)} person container(s) in new structure")
+                    # Get the actual elements
+                    all_divs = await page.query_selector_all('div')
+                    person_cards = [all_divs[idx] for idx in person_containers if idx < len(all_divs)]
+                else:
+                    print("  ⚠️ No person containers found, falling back to page body")
+                    body = await page.query_selector('body')
+                    if body:
+                        person_cards = [body]
 
             if not person_cards:
                 print("  ❌ Cannot find page content")
                 return None
 
-            print(f"  ✅ Found {len(person_cards)} result container(s)")
+            print(f"  ✅ Found {len(person_cards)} result container(s) to check")
 
             for i, card in enumerate(person_cards):
                 print(f"  🔍 Checking result #{i+1}")
