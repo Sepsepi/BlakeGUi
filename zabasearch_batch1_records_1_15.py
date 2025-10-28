@@ -1088,8 +1088,8 @@ class ZabaSearchExtractor:
                                             # NEW: Check if phone type is MOBILE (case-insensitive)
                                             element_text_lower = element_text.lower()
 
-                                            # Look for "mobile", "wireless", or "cellular" indicators
-                                            is_mobile = any(indicator in element_text_lower for indicator in ['mobile', 'wireless', 'cellular'])
+                                            # Look for "mobile", "wireless", "cellular", or "voip" indicators
+                                            is_mobile = any(indicator in element_text_lower for indicator in ['mobile', 'wireless', 'cellular', 'voip'])
                                             is_landline = 'landline' in element_text_lower
 
                                             if is_mobile and not is_landline:
