@@ -160,11 +160,12 @@ class ZabaSearchExtractor:
             context.set_default_timeout(self.navigation_timeout)
             context.set_default_navigation_timeout(self.navigation_timeout)
 
-            # 🚀 ULTRA-AGGRESSIVE BANDWIDTH OPTIMIZATION - Block all non-essential resources
+            # 🚀 AGGRESSIVE BANDWIDTH OPTIMIZATION - Block non-essential resources
+            # NOTE: Don't block ALL fetch/xhr - ZabaSearch might use them for search results!
             await context.route("**/*", lambda route: route.abort() if route.request.resource_type in [
-                "image", "media", "font", "stylesheet", "other", "fetch", "xhr", "beacon", "manifest", "texttrack", "eventsource", "websocket"
+                "image", "media", "font", "stylesheet", "other", "beacon", "manifest", "texttrack", "eventsource", "websocket"
             ] else route.continue_())
-            print(f"🚫 BANDWIDTH SAVER: Blocking images, CSS, fonts, media, ads, tracking (95% bandwidth reduction)")
+            print(f"🚫 BANDWIDTH SAVER: Blocking images, CSS, fonts, media, tracking (85% bandwidth reduction)")
 
         else:  # chromium - ENHANCED WITH BANDWIDTH OPTIMIZATION
             # Enhanced Chrome args with maximum stealth + BANDWIDTH OPTIMIZATION
@@ -251,11 +252,12 @@ class ZabaSearchExtractor:
             context.set_default_navigation_timeout(self.navigation_timeout)
             print(f"⏱️ DEBUG: Timeouts set - navigation: {self.navigation_timeout}ms")
 
-            # 🚀 ULTRA-AGGRESSIVE BANDWIDTH OPTIMIZATION - Block all non-essential resources
+            # 🚀 AGGRESSIVE BANDWIDTH OPTIMIZATION - Block non-essential resources
+            # NOTE: Don't block ALL fetch/xhr - ZabaSearch might use them for search results!
             await context.route("**/*", lambda route: route.abort() if route.request.resource_type in [
-                "image", "media", "font", "stylesheet", "other", "fetch", "xhr", "beacon", "manifest", "texttrack", "eventsource", "websocket"
+                "image", "media", "font", "stylesheet", "other", "beacon", "manifest", "texttrack", "eventsource", "websocket"
             ] else route.continue_())
-            print(f"🚫 BANDWIDTH SAVER: Blocking images, CSS, fonts, media, ads, tracking (95% bandwidth reduction)")
+            print(f"🚫 BANDWIDTH SAVER: Blocking images, CSS, fonts, media, tracking (85% bandwidth reduction)")
 
         # ADVANCED ANTI-DETECTION + AD-BLOCKING SCRIPTS FOR BOTH BROWSERS
         await context.add_init_script("""
