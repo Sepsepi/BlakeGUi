@@ -1097,8 +1097,13 @@ class ZabaSearchExtractor:
                         if last_known_section:
                             print("    🎯 Found 'Last Known Phone Numbers' section")
 
-                            # Get next sibling elements that contain the phone numbers
-                            phone_content_elements = await card.query_selector_all('h3:has-text("Last Known Phone Numbers") ~ *')
+                            # Get the parent element that contains the entire phone numbers section
+                            # Then get all child elements to ensure we catch ALL phones (first, second, third, etc.)
+                            parent_section = await last_known_section.eval_handle('element => element.parentElement')
+
+                            # Get ALL elements in the parent (this will include ALL phone entries, not just siblings)
+                            phone_content_elements = await parent_section.query_selector_all('*')
+                            print(f"    🔍 Found {len(phone_content_elements)} elements to check in phone section")
 
                             # NEW: Extract phones with type checking for MOBILE ONLY
                             mobile_phones = []
