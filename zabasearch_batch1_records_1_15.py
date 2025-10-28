@@ -1040,15 +1040,21 @@ class ZabaSearchExtractor:
                         console.log('Total divs:', allDivs.length);
 
                         const personDivs = allDivs.filter(div => {
-                            // Must have h2 (name heading) AND h3 (section headings like "Last Known Phone Numbers")
+                            // Must have h2 (name heading) - works on BOTH list pages and profile pages
                             const hasH2 = div.querySelector('h2') !== null;
-                            const hasH3 = div.querySelector('h3') !== null;
-                            // Must contain phone or address sections
+                            if (!hasH2) return false;
+
+                            // Must contain person-specific content
                             const text = div.innerText || '';
-                            const hasPhoneOrAddress = text.includes('Last Known Phone Numbers') ||
-                                                       text.includes('Last Known Address') ||
-                                                       text.includes('Associated Phone Numbers');
-                            return hasH2 && hasH3 && hasPhoneOrAddress;
+
+                            // Check for markers that indicate this is a person result (not navigation/footer/etc)
+                            const hasPersonMarkers = text.includes('Associated Phone Numbers') ||
+                                                      text.includes('Last Known Phone Numbers') ||
+                                                      text.includes('Last Known Address') ||
+                                                      text.includes('Possible Relatives') ||
+                                                      text.includes('Age');
+
+                            return hasH2 && hasPersonMarkers;
                         });
 
                         console.log('Person divs found:', personDivs.length);
