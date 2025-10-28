@@ -1035,35 +1035,46 @@ class ZabaSearchExtractor:
                 try:
                     # New ZabaSearch structure: Each person is in a div containing h2 (name) + h3 sections
                     # Use JavaScript to find all divs that have both h2 and h3 (indicates full person profile)
+                    # SIMPLEST & MOST RELIABLE: Find parent divs of h2 name headings
+                    # Works on both list pages and profile pages
                     person_containers = await page.evaluate('''() => {
+                        // Find all h2 elements (each is a person's name)
+                        const h2Elements = Array.from(document.querySelectorAll('h2'));
+
+                        // For each h2, find its substantial parent container
+                        const personDivs = h2Elements.map(h2 => {
+                            let parent = h2.parentElement;
+
+                            // Walk up the DOM to find a container with substantial content
+                            while (parent && parent.tagName !== 'BODY') {
+                                const text = parent.innerText || '';
+                                const wordCount = text.split(/\\s+/).length;
+
+                                // Person container should have:
+                                // - Substantial content (>50 words)
+                                // - Person-related keywords
+                                if (wordCount > 50 &&
+                                    (text.includes('Age') ||
+                                     text.includes('Phone') ||
+                                     text.includes('Address') ||
+                                     text.includes('Relatives') ||
+                                     text.includes('Email'))) {
+                                    return parent;
+                                }
+                                parent = parent.parentElement;
+                            }
+                            return null;
+                        }).filter(div => div !== null);
+
+                        // Remove duplicates (multiple h2s might share same parent)
+                        const uniqueDivs = [...new Set(personDivs)];
+
+                        console.log('H2 elements:', h2Elements.length);
+                        console.log('Unique person containers:', uniqueDivs.length);
+
+                        // Return indices
                         const allDivs = Array.from(document.querySelectorAll('div'));
-                        console.log('Total divs:', allDivs.length);
-
-                        const personDivs = allDivs.filter(div => {
-                            // Must have h2 (name heading) - works on BOTH list pages and profile pages
-                            const hasH2 = div.querySelector('h2') !== null;
-                            if (!hasH2) return false;
-
-                            // Must contain person-specific content
-                            const text = div.innerText || '';
-
-                            // Check for markers that indicate this is a person result (not navigation/footer/etc)
-                            const hasPersonMarkers = text.includes('Associated Phone Numbers') ||
-                                                      text.includes('Last Known Phone Numbers') ||
-                                                      text.includes('Last Known Address') ||
-                                                      text.includes('Possible Relatives') ||
-                                                      text.includes('Age');
-
-                            return hasH2 && hasPersonMarkers;
-                        });
-
-                        console.log('Person divs found:', personDivs.length);
-
-                        // Return indices of matching divs
-                        return personDivs.map(div => {
-                            const allDivsArray = Array.from(document.querySelectorAll('div'));
-                            return allDivsArray.indexOf(div);
-                        });
+                        return uniqueDivs.map(div => allDivs.indexOf(div));
                     }''')
 
                     print(f"  🔍 DEBUG: JavaScript returned {len(person_containers) if person_containers else 0} container indices")
