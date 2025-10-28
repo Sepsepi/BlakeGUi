@@ -873,8 +873,9 @@ class ZabaSearchExtractor:
         """Search for a person on ZabaSearch with optimized processing"""
         max_retries = 3
         retried_without_city = False  # Track if we already retried without city
+        attempt = 0
 
-        for attempt in range(max_retries):
+        while attempt < max_retries:
             try:
                 print(f"🔍 Searching ZabaSearch: {first_name} {last_name} (Attempt {attempt + 1}/{max_retries})")
                 print(f"  🌐 Navigating to ZabaSearch...")
@@ -970,6 +971,7 @@ class ZabaSearchExtractor:
                         print(f"  🔄 Retrying search without city filter...")
                         city = ""  # Clear city for retry
                         retried_without_city = True
+                        # DON'T increment attempt - this is a free retry for 404
                         continue
                     else:
                         print(f"  ❌ Person not found in ZabaSearch database")
@@ -981,10 +983,15 @@ class ZabaSearchExtractor:
 
                 if result:
                     print(f"  ✅ Successfully extracted data for {first_name} {last_name}")
+                    return result
                 else:
                     print(f"  ❌ No matching data found for {first_name} {last_name}")
-
-                return result
+                    # Extraction failed but no exception - this counts as a failed attempt
+                    attempt += 1
+                    if attempt >= max_retries:
+                        return None
+                    # Try again
+                    continue
 
             except Exception as e:
                 error_msg = str(e).lower()
@@ -995,13 +1002,17 @@ class ZabaSearchExtractor:
                 if any(term in error_msg for term in ['connection', 'socket', 'timeout', 'closed']):
                     print(f"  🛡️ Detected connection issue - likely Cloudflare blocking")
                     if attempt < max_retries - 1:
-                        wait_time = 10 + (attempt * 5)  # Reduced waiting time - was 15 + (attempt * 10)
+                        wait_time = 10 + (attempt * 5)
                         print(f"  ⏳ Waiting {wait_time} seconds before retry...")
                         await asyncio.sleep(wait_time)
+                        attempt += 1  # Increment for error retries
                         continue
 
                 if attempt == max_retries - 1:
                     print(f"  💥 All retry attempts failed")
+                    return None
+
+                attempt += 1  # Increment for other errors
 
         return None
 
@@ -1091,67 +1102,68 @@ class ZabaSearchExtractor:
                         if last_known_section:
                             print("    🎯 Found 'Last Known Phone Numbers' section")
 
-                            # SIMPLE & FAST: Get all h4 headings in the card that contain phone numbers
-                            # Structure: h3 "Last Known Phone Numbers" → generic → generic → h4 + paragraph (type)
-                            all_h4s = await card.query_selector_all('h4')
+                            # FASTEST APPROACH: Get ALL text from the section and extract with regex
+                            # Get all text after "Last Known Phone Numbers" until next h3 section
+                            card_text = await card.inner_text()
+
+                            # Find the "Last Known Phone Numbers" section text
+                            last_known_start = card_text.find("Last Known Phone Numbers")
+                            if last_known_start < 0:
+                                print("    ❌ Cannot locate Last Known Phone Numbers text")
+                                continue
+
+                            # Find where the next section starts (Last Known Address, Past Addresses, etc.)
+                            section_end_markers = ["Last Known Address", "Past Addresses", "Associated Email"]
+                            section_end = len(card_text)
+                            for marker in section_end_markers:
+                                pos = card_text.find(marker, last_known_start)
+                                if pos > 0 and pos < section_end:
+                                    section_end = pos
+
+                            # Extract just the "Last Known Phone Numbers" section text
+                            section_text = card_text[last_known_start:section_end]
+
+                            # Find ALL phone numbers in this section
                             phone_pattern = r'\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}'
+                            phone_matches = re.finditer(phone_pattern, section_text)
+
                             mobile_phones = []
 
-                            # Get full card text once for position checking
-                            card_text = await card.inner_text()
-                            last_known_pos = card_text.find("Last Known Phone Numbers")
+                            for match in phone_matches:
+                                phone_number = match.group()
+                                phone_start = match.start()
+                                phone_end = match.end()
 
-                            print(f"    🔍 Found {len(all_h4s)} h4 elements total, checking for phones after 'Last Known Phone Numbers'...")
+                                # Get text around this phone (next 200 chars) to check type
+                                context_text = section_text[phone_start:min(phone_end + 200, len(section_text))]
+                                context_lower = context_text.lower()
 
-                            for idx, h4 in enumerate(all_h4s):
-                                try:
-                                    h4_text = await h4.inner_text()
-
-                                    # Must contain phone number
-                                    phone_match = re.search(phone_pattern, h4_text)
-                                    if not phone_match:
-                                        print(f"       h4 #{idx+1}: No phone number found, skipping")
-                                        continue
-
-                                    # Must appear AFTER "Last Known Phone Numbers" in card text
-                                    phone_pos = card_text.find(h4_text)
-                                    if last_known_pos < 0 or phone_pos < last_known_pos:
-                                        print(f"       h4 #{idx+1}: Phone appears before Last Known section, skipping")
-                                        continue
-
-                                    print(f"    📞 h4 #{idx+1}: Checking phone in Last Known section: {phone_match.group()}")
-
-                                    # Get next sibling paragraph for type (landline/mobile/voip)
-                                    type_text = await h4.evaluate('(el) => el.nextElementSibling ? el.nextElementSibling.textContent : ""')
-                                    print(f"       Type: {type_text.strip()[:50]}")
-
-                                    # Skip landlines
-                                    if 'landline' in type_text.lower():
-                                        print(f"    🏠 Skipping LANDLINE: {phone_match.group()}")
-                                        continue
-
-                                    # Extract and format phone
-                                    digits = re.sub(r'\D', '', phone_match.group())
-                                    if len(digits) == 10:
-                                        formatted_phone = f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
-                                        is_primary = "primary phone" in h4_text.lower()
-
-                                        if formatted_phone not in [p['number'] for p in mobile_phones]:
-                                            mobile_phones.append({'number': formatted_phone, 'is_primary': is_primary})
-
-                                            # Log type
-                                            phone_type = "MOBILE/VOIP"
-                                            if 'mobile' in type_text.lower():
-                                                phone_type = "MOBILE"
-                                            elif 'voip' in type_text.lower():
-                                                phone_type = "VOIP"
-                                            elif 'wireless' in type_text.lower():
-                                                phone_type = "WIRELESS"
-
-                                            print(f"    📱 Found {phone_type} phone: {formatted_phone}" + (" (Primary)" if is_primary else ""))
-
-                                except Exception as e:
+                                # Skip if contains "landline"
+                                if 'landline' in context_lower:
+                                    print(f"    🏠 Skipping LANDLINE: {phone_number}")
                                     continue
+
+                                # Extract and format
+                                digits = re.sub(r'\D', '', phone_number)
+                                if len(digits) == 10:
+                                    formatted_phone = f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
+                                    is_primary = "primary phone" in context_lower
+
+                                    if formatted_phone not in [p['number'] for p in mobile_phones]:
+                                        mobile_phones.append({'number': formatted_phone, 'is_primary': is_primary})
+
+                                        # Determine type
+                                        phone_type = "MOBILE/VOIP"
+                                        if 'mobile' in context_lower:
+                                            phone_type = "MOBILE"
+                                        elif 'voip' in context_lower:
+                                            phone_type = "VOIP"
+                                        elif 'wireless' in context_lower:
+                                            phone_type = "WIRELESS"
+                                        elif 'cellular' in context_lower:
+                                            phone_type = "CELLULAR"
+
+                                        print(f"    📱 Found {phone_type} phone: {formatted_phone}" + (" (Primary)" if is_primary else ""))
 
                             # Process collected mobile phones
                             if mobile_phones:
