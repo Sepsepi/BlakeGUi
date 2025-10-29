@@ -140,21 +140,42 @@ class ZabaSearchExtractor:
             print(f"🔒 Using proxy: {proxy['server']}")
 
         if browser_type == 'firefox':
-            # Enhanced Firefox args
+            # Firefox args
             launch_args = [
                 '--no-sandbox',
                 '--disable-dev-shm-usage',
-                '--disable-extensions',
-                '--disable-plugins',
-                '--disable-translate',
                 '--new-instance',
                 '--no-remote',
-                f'--profile-directory=ff-session-{session_id}'
+                '--no-first-run'
             ]
+
+            # Firefox-specific preferences for PROXY COMPATIBILITY + bandwidth
+            firefox_prefs = {
+                # PROXY COMPATIBILITY FIXES for IPRoyal
+                'network.proxy.allow_hijacking_localhost': True,
+                'network.proxy.share_proxy_settings': True,
+                'network.automatic-ntlm-auth.allow-proxies': True,
+                'network.negotiate-auth.allow-proxies': True,
+                'security.tls.insecure_fallback_hosts': 'geo.iproyal.com',
+                'network.stricttransportsecurity.preloadlist': False,
+                'security.mixed_content.block_active_content': False,
+                'security.mixed_content.block_display_content': False,
+                'network.http.connection-timeout': 25,
+                'network.http.response.timeout': 60,
+
+                # Bandwidth optimization
+                'network.prefetch-next': False,
+                'network.dns.disablePrefetch': True,
+                'media.peerconnection.enabled': False,
+                'browser.cache.disk.enable': False,
+                'browser.cache.memory.enable': True
+            }
+
             browser = await playwright.firefox.launch(
                 headless=self.headless,
                 args=launch_args,
-                proxy=playwright_proxy
+                proxy=playwright_proxy,
+                firefox_user_prefs=firefox_prefs
             )
 
             context = await browser.new_context(
@@ -1448,7 +1469,7 @@ class ZabaSearchExtractor:
                 else:
                     print("📡 Using direct connection for ZabaSearch")
 
-                browser, context = await self.create_stealth_browser(playwright, proxy=proxy_config)
+                browser, context = await self.create_stealth_browser(playwright, browser_type='firefox', proxy=proxy_config)
                 page = await context.new_page()
                 session_success = 0
 
