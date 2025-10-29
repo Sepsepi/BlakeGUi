@@ -133,6 +133,15 @@ app.logger.addHandler(terminal_handler)  # Flask logger
 
 # Also capture werkzeug logs (Flask's built-in server logs)
 werkzeug_logger = logging.getLogger('werkzeug')
+
+# Filter to exclude noisy routes
+class NoTerminalFeedFilter(logging.Filter):
+    def filter(self, record):
+        # Don't log GET requests for terminal_feed, processing_status, recent_files
+        message = record.getMessage()
+        return not any(x in message for x in ['GET /terminal_feed', 'GET /processing_status', 'GET /recent_files', 'GET /user-info'])
+
+werkzeug_logger.addFilter(NoTerminalFeedFilter())
 werkzeug_logger.addHandler(terminal_handler)
 
 # Try to import BCPA integration (optional)
@@ -2804,14 +2813,25 @@ def kill_active_process():
         stop_flag = process_info.get('stop_flag')
         if stop_flag:
             stop_flag.set()
-            logger.info(f"🛑 Stop signal sent for {process_type} processing: {filename} (User: {user_id})")
+            logger.info(f"Stop signal sent for {process_type} processing: {filename} (User: {user_id})")
 
-        # Try to terminate the thread (note: Python threads can't be killed directly, but stop_flag will work)
-        # The processing code needs to check stop_flag periodically
+        # FORCE KILL: Kill all chromium/playwright browser processes
+        import subprocess
+        try:
+            # Kill chromium processes
+            subprocess.run(['pkill', '-9', '-f', 'chromium'], stderr=subprocess.DEVNULL)
+            subprocess.run(['pkill', '-9', '-f', 'playwright'], stderr=subprocess.DEVNULL)
+            logger.info(f"Killed all browser processes")
+        except Exception as kill_error:
+            logger.warning(f"Could not kill browser processes: {kill_error}")
+
+        # Remove from active threads
+        if user_id in active_processing_threads:
+            del active_processing_threads[user_id]
 
         return jsonify({
             'success': True,
-            'message': f'Stop signal sent to {process_type} processing',
+            'message': f'Processing terminated and browser processes killed',
             'type': process_type,
             'filename': filename
         })

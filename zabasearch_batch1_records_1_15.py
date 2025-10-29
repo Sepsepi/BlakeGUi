@@ -22,6 +22,21 @@ import gc
 from urllib.parse import quote
 import argparse
 
+# Strip emojis from output for clean terminal
+import sys
+_original_print = print
+def print(*args, **kwargs):
+    """Override print to remove emojis"""
+    cleaned_args = []
+    for arg in args:
+        if isinstance(arg, str):
+            # Remove emojis using regex
+            cleaned = re.sub(r'[^\x00-\x7F]+', '', arg)
+            cleaned_args.append(cleaned)
+        else:
+            cleaned_args.append(arg)
+    _original_print(*cleaned_args, **kwargs)
+
 # Import proxy manager for selective proxy usage
 try:
     from proxy_manager import get_proxy_for_zabasearch, is_proxy_enabled
