@@ -886,6 +886,12 @@ class ZabaSearchExtractor:
         retried_without_city = False  # Track if we already retried without city
         attempt = 0
 
+        # Convert city aliases BEFORE searching (THE ACREAGE → Don't use, will 404)
+        # Better: Just don't use THE ACREAGE in search at all - rely on state + address matching
+        if city and city.upper() in ['THE ACREAGE', 'ACREAGE']:
+            print(f"  🔄 '{city}' is unincorporated - searching without city (will use address matching)")
+            city = ""  # Don't use city in search, rely on address matching
+
         while attempt < max_retries:
             try:
                 print(f"🔍 Searching ZabaSearch: {first_name} {last_name} (Attempt {attempt + 1}/{max_retries})")
