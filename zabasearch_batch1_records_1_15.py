@@ -1175,8 +1175,10 @@ class ZabaSearchExtractor:
                     phones = {"primary": None, "secondary": None, "all": []}
 
                     try:
-                        # Look specifically for "Last Known Phone Numbers" section
-                        last_known_section = await card.query_selector('h3:has-text("Last Known Phone Numbers")')
+                        # Check if "Last Known Phone Numbers" text exists in the card
+                        # Don't use :has-text() selector as it requires CSS
+                        card_text_check = await card.inner_text()
+                        last_known_section = "Last Known Phone Numbers" in card_text_check
 
                         if last_known_section:
                             print("    🎯 Found 'Last Known Phone Numbers' section")
