@@ -149,7 +149,7 @@ class ZabaSearchExtractor:
                 '--no-first-run'
             ]
 
-            # Firefox-specific preferences for PROXY COMPATIBILITY + bandwidth
+            # Firefox-specific preferences for MAXIMUM STEALTH + PROXY COMPATIBILITY
             firefox_prefs = {
                 # PROXY COMPATIBILITY FIXES for IPRoyal
                 'network.proxy.allow_hijacking_localhost': True,
@@ -163,12 +163,40 @@ class ZabaSearchExtractor:
                 'network.http.connection-timeout': 25,
                 'network.http.response.timeout': 60,
 
-                # Bandwidth optimization
+                # COMPLETE WebRTC DISABLE (prevents IP leaks)
+                'media.peerconnection.enabled': False,
+                'media.navigator.enabled': False,
+                'media.navigator.video.enabled': False,
+                'media.webrtc.hw.h264.enabled': False,
+                'media.getusermedia.screensharing.enabled': False,
+
+                # ANTI-FINGERPRINTING
+                'privacy.resistFingerprinting': True,  # Firefox's built-in fingerprinting protection
+                'privacy.trackingprotection.enabled': True,
+                'privacy.trackingprotection.fingerprinting.enabled': True,
+                'privacy.trackingprotection.cryptomining.enabled': True,
+                'privacy.firstparty.isolate': True,  # Isolate cookies per domain
+
+                # DNS/NETWORK PRIVACY
+                'network.dns.disableIPv6': True,  # Only IPv4 (more consistent)
                 'network.prefetch-next': False,
                 'network.dns.disablePrefetch': True,
-                'media.peerconnection.enabled': False,
+                'network.http.sendRefererHeader': 0,  # Don't send referer
+
+                # PERFORMANCE (no speed impact)
                 'browser.cache.disk.enable': False,
-                'browser.cache.memory.enable': True
+                'browser.cache.memory.enable': True,
+                'browser.sessionstore.resume_from_crash': False,
+                'browser.tabs.crashReporting.sendReport': False,
+
+                # DISABLE TELEMETRY/TRACKING
+                'toolkit.telemetry.enabled': False,
+                'datareporting.healthreport.uploadEnabled': False,
+                'app.update.enabled': False,
+
+                # TLS/SECURITY (match real browser)
+                'security.ssl.enable_ocsp_stapling': True,
+                'security.ssl.errorReporting.enabled': False
             }
 
             browser = await playwright.firefox.launch(
@@ -178,18 +206,25 @@ class ZabaSearchExtractor:
                 firefox_user_prefs=firefox_prefs
             )
 
+            # Match screen size to viewport (consistency is key for fingerprinting)
+            screen_size = {'width': viewport['width'], 'height': viewport['height']}
+
             context = await browser.new_context(
                 viewport=viewport,
+                screen=screen_size,  # Match screen to viewport
                 user_agent=random.choice(self.firefox_user_agents),
                 locale=locale_tz['locale'],
                 timezone_id=locale_tz['timezone'],
                 device_scale_factor=random.choice([1, 1.25, 1.5]),
                 has_touch=random.choice([True, False]),
+                is_mobile=False,  # Desktop browser
                 permissions=['geolocation'],
                 geolocation={'longitude': random.uniform(-80.5, -80.0), 'latitude': random.uniform(25.5, 26.5)},
                 java_script_enabled=True,
                 bypass_csp=True,
-                ignore_https_errors=True
+                ignore_https_errors=True,
+                color_scheme='light',  # Consistent color scheme
+                reduced_motion='no-preference'  # Normal animations
             )
 
             # Set default timeouts for all page operations
